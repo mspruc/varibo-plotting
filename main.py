@@ -6,10 +6,10 @@ import numpy as np
 
 plt.close("all")
 
-SWATCH_1 = '#0072B2' #classifier
-SWATCH_2 = '#E69F00' #varibo
-SWATCH_3 = "#009E73" #native
-SWATCH_4 = "#D55E00" #explored
+CLASSIFIER_COLOR = '#0072B2' #classifier
+VARIBO_COLOR = '#E69F00' #varibo
+NATIVE_COLOR = "#009E73" #native
+EXPLORED_COLOR = "#D55E00" #explored
 
 # shows speed up ratio over each benchmark compared to native
 # we ablate the queries THAT WE DONT EXPLORE ON from the benchmark and see if the explored queries correctly reconstruct
@@ -18,7 +18,7 @@ def finetuning_capability_ablation_study():
     job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t')
     stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
     tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t')
-    
+
     def restrict_to_explored(full_df, explored_df):
         explored_queries = set(explored_df["Query"])
         benchmarked_queries = full_df["Query"]
@@ -31,7 +31,7 @@ def finetuning_capability_ablation_study():
     job_df   = restrict_to_explored(job_df, job_explored_df)
     stats_df = restrict_to_explored(stats_df, stats_explored_df)
     tpch_df  = restrict_to_explored(tpch_df, tpch_explored_df)
-    
+
     # classifier % of native
     job_percentage_classifier   = (job_explored_df['Explored'].sum() / job_df['Classifier'].sum())
     stats_percentage_classifier = (stats_explored_df['Explored'].sum() / stats_df['Classifier'].sum())
@@ -48,8 +48,8 @@ def finetuning_capability_ablation_study():
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=SWATCH_1, label='Classifier')
-    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=SWATCH_2, label='VariBO')
+    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
+    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -58,7 +58,7 @@ def finetuning_capability_ablation_study():
     ax.grid(False)
 
     ax.set_ylim(0, 1.6)
-    plt.yticks([]) 
+    plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -80,7 +80,7 @@ def finetuning_capability_ablation_study():
 
     ax.legend(frameon=False)
     plt.tight_layout()
-    plt.show()
+    plt.savefig('./data/ablation.pdf')
 
 
 # shows speed up ratio over each benchmark compared to native
@@ -90,7 +90,7 @@ def generalization_ablation_study():
     job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t')
     stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
     tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t')
-    
+
     def restrict_to_not_explored(full_df, explored_df):
         explored_queries = set(explored_df["Query"])
         return full_df[~full_df["Query"].isin(explored_queries)]
@@ -119,8 +119,8 @@ def generalization_ablation_study():
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=SWATCH_1, label='Classifier')
-    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=SWATCH_2, label='VariBO')
+    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
+    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -129,7 +129,7 @@ def generalization_ablation_study():
     ax.grid(False)
 
     ax.set_ylim(0, 1.6)
-    plt.yticks([]) 
+    plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -159,7 +159,7 @@ def speedup_side_by_side():
     job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t')
     stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
     tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t')
-    
+
     # classifier % of native
     job_percentage_classifier   = (job_df['Native'].sum() / job_df['Classifier'].sum())#*100
     stats_percentage_classifier = (stats_df['Native'].sum() / stats_df['Classifier'].sum())#*100
@@ -169,15 +169,15 @@ def speedup_side_by_side():
     job_percentage_varibo   = (job_df['Native'].sum() / job_df['Carbon'].sum())#*100
     stats_percentage_varibo = (stats_df['Native'].sum() / stats_df['Carbon'].sum())#*100
     tpch_percentage_varibo  = (tpch_df['Native'].sum() / tpch_df['Carbon'].sum())#*100
-    
+
     labels = ['JOB', 'STATS', 'TPCH']
     x = np.arange(len(labels))
     width = 0.25
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=SWATCH_1, label='Classifier')
-    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=SWATCH_2, label='VariBO')
+    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
+    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -186,7 +186,7 @@ def speedup_side_by_side():
     ax.grid(False)
 
     ax.set_ylim(0, 1.6)
-    plt.yticks([]) 
+    plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -229,7 +229,7 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
     baseline = 1.0
 
     # Colors
-    colors = [SWATCH_3 if v >= baseline else SWATCH_4
+    colors = [NATIVE_COLOR if v >= baseline else EXPLORED_COLOR
               for v in table_df['improvement']]
 
     # ---- NEW: bar geometry ----
@@ -301,23 +301,59 @@ def make_stats_cumsum():
     plt.savefig('./data/stats/vis.pdf')
 
 def make_tpch_cumsum():
-    table_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
-    explored_df = pd.read_csv("./data/tpch/explored.csv", delimiter='\t')
-    table_df['Explored'] = explored_df['Explored']
-    table_df = table_df.sort_values(by='Native')
-    table_df = table_df.cumsum()
-    table_df['Query'] = range(0, 30)
-    table_df = table_df.set_index('Query')
-    plt.figure()
-    table_df.plot()
-    plt.savefig('./data/tpch/vis.pdf')
+    tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
+    # TODO: replace with real data when available
+    job_df   = tpch_df
+    stats_df = tpch_df
+
+    def speedups(df):
+        totals = df.sum()
+        return totals['Native'] / totals['Classifier'], totals['Native'] / totals['Carbon']
+
+    job_classifier,   job_varibo   = speedups(job_df)
+    stats_classifier, stats_varibo = speedups(stats_df)
+    tpch_classifier,  tpch_varibo  = speedups(tpch_df)
+
+    labels = ['JOB', 'STATS', 'TPC-H']
+    x = np.arange(len(labels))
+    width = 0.25
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    bars1 = ax.bar(x - width/2, [job_classifier, stats_classifier, tpch_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
+    bars2 = ax.bar(x + width/2, [job_varibo,     stats_varibo,     tpch_varibo],     width, color=VARIBO_COLOR,     label='VariBO')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel("Speedup over Native")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.grid(False)
+    ax.set_ylim(0, 4.5)
+    plt.yticks([])
+
+    def label_bars(bars):
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, height + 0.01, f"{height:.2f}x",
+                    ha='center', va='bottom', fontsize=9)
+
+    label_bars(bars1)
+    label_bars(bars2)
+
+    ax.legend(frameon=True, loc='upper left')
+    plt.tight_layout()
+    plt.savefig('./data/speedups.pdf')
 
 def main():
     #exploration_graph('./data/job/explored.csv', './data/job/explored.pdf', range(0, 10))
 
-    stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
-    exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
+    #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
+    #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
+    make_tpch_cumsum()
+
 
 if __name__ == "__main__":
-    stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
-    exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
+    #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
+    #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
+    main()
