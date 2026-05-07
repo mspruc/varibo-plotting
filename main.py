@@ -28,19 +28,20 @@ def finetuning_capability_ablation_study():
     stats_explored_df = pd.read_csv("./data/stats/explored.csv", delimiter='\t')
     tpch_explored_df  = pd.read_csv("./data/tpch/explored.csv", delimiter='\t')
 
+
     job_df   = restrict_to_explored(job_df, job_explored_df)
     stats_df = restrict_to_explored(stats_df, stats_explored_df)
     tpch_df  = restrict_to_explored(tpch_df, tpch_explored_df)
 
     # classifier % of native
-    job_percentage_classifier   = (job_explored_df['Explored'].sum() / job_df['Classifier'].sum())
-    stats_percentage_classifier = (stats_explored_df['Explored'].sum() / stats_df['Classifier'].sum())
-    tpch_percentage_classifier  = (tpch_explored_df['Explored'].sum() / tpch_df['Classifier'].sum())
+    job_percentage_classifier   = (job_explored_df['Native'].sum() / job_df['Classifier'].sum())
+    stats_percentage_classifier = (stats_explored_df['Native'].sum() / stats_df['Classifier'].sum())
+    tpch_percentage_classifier  = (tpch_explored_df['Native'].sum() / tpch_df['Classifier'].sum())
 
     # varibo % of native
-    job_percentage_varibo   = (job_explored_df['Explored'].sum() / job_df['Carbon'].sum())
-    stats_percentage_varibo = (stats_explored_df['Explored'].sum() / stats_df['Carbon'].sum())
-    tpch_percentage_varibo  = (tpch_explored_df['Explored'].sum() / tpch_df['Carbon'].sum())
+    job_percentage_varibo   = (job_explored_df['Native'].sum() / job_df['Carbon'].sum())
+    stats_percentage_varibo = (stats_explored_df['Native'].sum() / stats_df['Carbon'].sum())
+    tpch_percentage_varibo  = (tpch_explored_df['Native'].sum() / tpch_df['Carbon'].sum())
 
     labels = ['JOB', 'STATS', 'TPCH']
     x = np.arange(len(labels))
@@ -53,11 +54,14 @@ def finetuning_capability_ablation_study():
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_ylabel('Speedup ratio over Exploration set')
+    ax.set_ylabel('Speedup ratio over Native')
+
+    plt.title('Speedup over Native in explored queries')
+
 
     ax.grid(False)
 
-    ax.set_ylim(0, 1.6)
+    ax.set_ylim(0, 7.5)
     plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -89,7 +93,6 @@ def finetuning_capability_ablation_study():
 def generalization_ablation_study():
     job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t')
     stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
-    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t')
 
     def restrict_to_not_explored(full_df, explored_df):
         explored_queries = set(explored_df["Query"])
@@ -97,30 +100,26 @@ def generalization_ablation_study():
 
     job_explored_df   = pd.read_csv("./data/job/explored.csv", delimiter='\t')
     stats_explored_df = pd.read_csv("./data/stats/explored.csv", delimiter='\t')
-    tpch_explored_df  = pd.read_csv("./data/tpch/explored.csv", delimiter='\t')
 
     job_df   = restrict_to_not_explored(job_df, job_explored_df)
     stats_df = restrict_to_not_explored(stats_df, stats_explored_df)
-    tpch_df  = restrict_to_not_explored(tpch_df, tpch_explored_df)
 
     # classifier % of native
     job_percentage_classifier   = (job_df['Native'].sum() / job_df['Classifier'].sum())
     stats_percentage_classifier = (stats_df['Native'].sum() / stats_df['Classifier'].sum())
-    tpch_percentage_classifier  = (tpch_df['Native'].sum() / tpch_df['Classifier'].sum())
 
     # varibo % of native
     job_percentage_varibo   = (job_df['Native'].sum() / job_df['Carbon'].sum())
     stats_percentage_varibo = (stats_df['Native'].sum() / stats_df['Carbon'].sum())
-    tpch_percentage_varibo  = (tpch_df['Native'].sum() / tpch_df['Carbon'].sum())
 
-    labels = ['JOB', 'STATS', 'TPCH']
+    labels = ['JOB', 'STATS']
     x = np.arange(len(labels))
     width = 0.25
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
-    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
+    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
+    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -128,7 +127,7 @@ def generalization_ablation_study():
 
     ax.grid(False)
 
-    ax.set_ylim(0, 1.6)
+    ax.set_ylim(0, 3.5)
     plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -151,7 +150,8 @@ def generalization_ablation_study():
 
     ax.legend(frameon=False)
     plt.tight_layout()
-    plt.show()
+
+    plt.savefig('./data/ablation_unexplored.pdf')
 
 # shows speedup ratio relative to native of each benchmark side by side
 # JOB STATS TPCH ordered lexicographically
@@ -302,9 +302,8 @@ def make_stats_cumsum():
 
 def make_tpch_cumsum():
     tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
-    # TODO: replace with real data when available
-    job_df   = tpch_df
-    stats_df = tpch_df
+    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
+    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
 
     def speedups(df):
         totals = df.sum()
@@ -356,4 +355,5 @@ def main():
 if __name__ == "__main__":
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    main()
+    #main()
+    generalization_ablation_study()
