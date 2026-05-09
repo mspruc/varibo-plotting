@@ -370,17 +370,49 @@ def make_optimization_barchart():
     plt.tight_layout()
     plt.savefig('./data/optimization/optimization.pdf')
 
+def make_exploration_comparison(varibo_df: DataFrame, random_df: DataFrame, xlim: int, output_file: str):
+    for df in (varibo_df, random_df):
+        if df['Steps'].iloc[-1] < xlim:
+            df.loc[len(df)] = [xlim, df['Runtime'].iloc[-1]]
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(varibo_df['Steps'], varibo_df['Runtime'], color=VARIBO_COLOR, label='VariBO')
+    ax.plot(random_df['Steps'], random_df['Runtime'], color=CLASSIFIER_COLOR, label='Random')
+
+    ax.set_xlim(0, xlim)
+    ax.set_xlabel('Steps')
+    ax.set_ylabel('Execution time (ms)')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(frameon=False)
+    plt.tight_layout()
+    plt.savefig(output_file)
+
+
 def main():
     #exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30))
 
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    make_tpch_cumsum()
+    #make_tpch_cumsum()
     #make_optimization_barchart()
+
+    job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    make_exploration_comparison(job_varibo_df, job_random_df, xlim=125, output_file='./data/job/exploration_comparison.pdf')
+
+    tpch_varibo_df = pd.read_csv("./data/tpch/12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    tpch_random_df = pd.read_csv("./data/tpch/random.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    make_exploration_comparison(tpch_varibo_df, tpch_random_df, xlim=50, output_file='./data/tpch/exploration_comparison.pdf')
+
+    stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    make_exploration_comparison(stats_varibo_df, stats_random_df, xlim=50, output_file='./data/stats/exploration_comparison.pdf')
+
 
 
 if __name__ == "__main__":
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    #main()
-    finetuning_capability_ablation_study()
+    main()
+    #finetuning_capability_ablation_study()
