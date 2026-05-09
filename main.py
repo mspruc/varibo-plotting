@@ -11,6 +11,8 @@ VARIBO_COLOR = '#E69F00' #varibo
 NATIVE_COLOR = "#009E73" #native
 EXPLORED_COLOR = "#D55E00" #explored
 
+SYSTEM_NAME = "VariBO"
+
 # shows speed up ratio over each benchmark compared to native
 # we ablate the queries THAT WE DONT EXPLORE ON from the benchmark and see if the explored queries correctly reconstruct
 # JOB STATS TPCH ordered lexicographically
@@ -39,9 +41,9 @@ def finetuning_capability_ablation_study():
     tpch_percentage_classifier  = (tpch_explored_df['Native'].sum() / tpch_df['Classifier'].sum())
 
     # varibo % of native
-    job_percentage_varibo   = (job_explored_df['Native'].sum() / job_df['Carbon'].sum())
-    stats_percentage_varibo = (stats_explored_df['Native'].sum() / stats_df['Carbon'].sum())
-    tpch_percentage_varibo  = (tpch_explored_df['Native'].sum() / tpch_df['Carbon'].sum())
+    job_percentage_varibo   = (job_explored_df['Native'].sum() / job_df[SYSTEM_NAME].sum())
+    stats_percentage_varibo = (stats_explored_df['Native'].sum() / stats_df[SYSTEM_NAME].sum())
+    tpch_percentage_varibo  = (tpch_explored_df['Native'].sum() / tpch_df[SYSTEM_NAME].sum())
 
     labels = ['JOB', 'STATS', 'TPCH']
     x = np.arange(len(labels))
@@ -109,8 +111,8 @@ def generalization_ablation_study():
     stats_percentage_classifier = (stats_df['Native'].sum() / stats_df['Classifier'].sum())
 
     # varibo % of native
-    job_percentage_varibo   = (job_df['Native'].sum() / job_df['Carbon'].sum())
-    stats_percentage_varibo = (stats_df['Native'].sum() / stats_df['Carbon'].sum())
+    job_percentage_varibo   = (job_df['Native'].sum() / job_df[SYSTEM_NAME].sum())
+    stats_percentage_varibo = (stats_df['Native'].sum() / stats_df[SYSTEM_NAME].sum())
 
     labels = ['JOB', 'STATS']
     x = np.arange(len(labels))
@@ -166,9 +168,9 @@ def speedup_side_by_side():
     tpch_percentage_classifier  = (tpch_df['Native'].sum() / tpch_df['Classifier'].sum())#*100
 
     # varibo % of native
-    job_percentage_varibo   = (job_df['Native'].sum() / job_df['Carbon'].sum())#*100
-    stats_percentage_varibo = (stats_df['Native'].sum() / stats_df['Carbon'].sum())#*100
-    tpch_percentage_varibo  = (tpch_df['Native'].sum() / tpch_df['Carbon'].sum())#*100
+    job_percentage_varibo   = (job_df['Native'].sum() / job_df[SYSTEM_NAME].sum())#*100
+    stats_percentage_varibo = (stats_df['Native'].sum() / stats_df[SYSTEM_NAME].sum())#*100
+    tpch_percentage_varibo  = (tpch_df['Native'].sum() / tpch_df[SYSTEM_NAME].sum())#*100
 
     labels = ['JOB', 'STATS', 'TPCH']
     x = np.arange(len(labels))
@@ -286,27 +288,27 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
     plt.savefig(ouput_file)
 
 def make_job_cumsum():
-    table_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
+    table_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','Classifier',SYSTEM_NAME])
     table_df = table_df.cumsum()
     plt.figure()
     table_df.plot()
     plt.savefig('./data/job/vis.pdf')
 
 def make_stats_cumsum():
-    table_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
+    table_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','Classifier',SYSTEM_NAME])
     table_df = table_df.cumsum()
     plt.figure()
     table_df.plot()
     plt.savefig('./data/stats/vis.pdf')
 
 def make_tpch_cumsum():
-    tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier','Carbon'])
-    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier','Carbon'])
-    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier','Carbon'])
+    tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
+    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
+    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
 
     def speedups(df):
         totals = df.sum()
-        return totals['Native'] / totals['NativeML'], totals['Native'] / totals['Classifier'], totals['Native'] / totals['Carbon']
+        return totals['Native'] / totals['NativeML'], totals['Native'] / totals['Classifier'], totals['Native'] / totals[SYSTEM_NAME]
 
     job_native_ml, job_classifier,   job_varibo   = speedups(job_df)
     stats_native_ml, stats_classifier, stats_varibo = speedups(stats_df)
@@ -369,16 +371,16 @@ def make_optimization_barchart():
     plt.savefig('./data/optimization/optimization.pdf')
 
 def main():
-    exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30))
+    #exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30))
 
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    #make_tpch_cumsum()
+    make_tpch_cumsum()
     #make_optimization_barchart()
 
 
 if __name__ == "__main__":
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    main()
-    #generalization_ablation_study()
+    #main()
+    finetuning_capability_ablation_study()
