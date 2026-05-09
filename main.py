@@ -284,7 +284,6 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
 
     plt.tight_layout()
     plt.savefig(ouput_file)
-    plt.show()
 
 def make_job_cumsum():
     table_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
@@ -301,25 +300,26 @@ def make_stats_cumsum():
     plt.savefig('./data/stats/vis.pdf')
 
 def make_tpch_cumsum():
-    tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
-    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
-    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','Classifier','Carbon'])
+    tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier','Carbon'])
+    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier','Carbon'])
+    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier','Carbon'])
 
     def speedups(df):
         totals = df.sum()
-        return totals['Native'] / totals['Classifier'], totals['Native'] / totals['Carbon']
+        return totals['Native'] / totals['NativeML'], totals['Native'] / totals['Classifier'], totals['Native'] / totals['Carbon']
 
-    job_classifier,   job_varibo   = speedups(job_df)
-    stats_classifier, stats_varibo = speedups(stats_df)
-    tpch_classifier,  tpch_varibo  = speedups(tpch_df)
+    job_native_ml, job_classifier,   job_varibo   = speedups(job_df)
+    stats_native_ml, stats_classifier, stats_varibo = speedups(stats_df)
+    tpch_native_ml, tpch_classifier,  tpch_varibo  = speedups(tpch_df)
 
     labels = ['JOB', 'STATS', 'TPC-H']
     x = np.arange(len(labels))
     width = 0.25
 
     fig, ax = plt.subplots(figsize=(7, 4))
-    bars1 = ax.bar(x - width/2, [job_classifier, stats_classifier, tpch_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
-    bars2 = ax.bar(x + width/2, [job_varibo,     stats_varibo,     tpch_varibo],     width, color=VARIBO_COLOR,     label='VariBO')
+    bars1 = ax.bar(x - width, [job_native_ml, stats_native_ml, tpch_native_ml], width, color=EXPLORED_COLOR, label='NativeML')
+    bars2 = ax.bar(x,         [job_classifier, stats_classifier, tpch_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
+    bars3 = ax.bar(x + width, [job_varibo,     stats_varibo,     tpch_varibo],     width, color=VARIBO_COLOR,     label='VariBO')
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -339,21 +339,46 @@ def make_tpch_cumsum():
 
     label_bars(bars1)
     label_bars(bars2)
+    label_bars(bars3)
 
     ax.legend(frameon=True, loc='upper left')
     plt.tight_layout()
     plt.savefig('./data/speedups.pdf')
 
+def make_optimization_barchart():
+    segments = ["Encoding", "Inference", "Unpacking", "Decoding", "Enumeration"]
+    opt_df = pd.read_csv("./data/optimization/table.csv", delimiter='\t',
+                         usecols=["Optimizer"] + segments)
+    opt_df = opt_df.set_index("Optimizer").fillna(0)
+
+    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#009E73']
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    bottoms = np.zeros(len(opt_df))
+    for seg, color in zip(segments, segment_colors):
+        values = opt_df[seg].values
+        ax.bar(opt_df.index, values, bottom=bottoms, color=color, label=seg)
+        bottoms += values
+
+    ax.set_ylabel("Optimization time (ms)")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(frameon=False, loc='upper left')
+    plt.tight_layout()
+    plt.savefig('./data/optimization/optimization.pdf')
+
 def main():
-    #exploration_graph('./data/job/explored.csv', './data/job/explored.pdf', range(0, 10))
+    exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30))
 
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    make_tpch_cumsum()
+    #make_tpch_cumsum()
+    #make_optimization_barchart()
 
 
 if __name__ == "__main__":
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    #main()
-    generalization_ablation_study()
+    main()
+    #generalization_ablation_study()
