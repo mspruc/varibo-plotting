@@ -2,16 +2,33 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import matplotlib.ticker as mticker
+import matplotlib.colors as mcolors
 import numpy as np
 
 plt.close("all")
 
-CLASSIFIER_COLOR = '#0072B2' #classifier
-VARIBO_COLOR = '#E69F00' #varibo
-NATIVE_COLOR = "#009E73" #native
-EXPLORED_COLOR = "#D55E00" #explored
+EXPLORED_COLOR   = '#0072B2'
+CLASSIFIER_COLOR = '#E69F00' 
+VARIBO_COLOR     = "#009E73"
+NATIVE_COLOR     = "#D55E00"
+NATIVEML_COLOR   = "#CC79A7"
+
+EXPLORED_HATCHING   = '---'
+CLASSIFIER_HATCHING = '\\\\\\'
+VARIBO_HATCHING     = '///'
+NATIVE_HATCHING     = 'xx'
+NATIVEML_HATCHING   = '||'
 
 SYSTEM_NAME = "VariBO"
+
+def transparent(color, amount=0.5):
+    r, g, b = mcolors.to_rgb(color)
+
+    r = 1 - (1 - r) * (1 - amount)
+    g = 1 - (1 - g) * (1 - amount)
+    b = 1 - (1 - b) * (1 - amount)
+    
+    return (r, g, b)
 
 # shows speed up ratio over each benchmark compared to native
 # we ablate the queries THAT WE DONT EXPLORE ON from the benchmark and see if the explored queries correctly reconstruct
@@ -29,7 +46,6 @@ def finetuning_capability_ablation_study():
     job_explored_df   = pd.read_csv("./data/job/explored.csv", delimiter='\t')
     stats_explored_df = pd.read_csv("./data/stats/explored.csv", delimiter='\t')
     tpch_explored_df  = pd.read_csv("./data/tpch/explored.csv", delimiter='\t')
-
 
     job_df   = restrict_to_explored(job_df, job_explored_df)
     stats_df = restrict_to_explored(stats_df, stats_explored_df)
@@ -51,15 +67,33 @@ def finetuning_capability_ablation_study():
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
-    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
+    bars1 = ax.bar(
+        x - width/2,
+        [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier],
+        width,
+        edgecolor=CLASSIFIER_COLOR,
+        facecolor=transparent(CLASSIFIER_COLOR, 0.7),
+        hatch=CLASSIFIER_HATCHING,
+        linewidth=1.5,
+        label='Classifier'
+    )
+
+    bars2 = ax.bar(
+        x + width/2,
+        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo],
+        width,
+        edgecolor=VARIBO_COLOR,
+        facecolor=transparent(VARIBO_COLOR, 0.7),
+        hatch=VARIBO_HATCHING,
+        linewidth=1.5,
+        label='VariBO'
+    )
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_ylabel('Speedup ratio over Native')
 
     plt.title('Speedup over Native in explored queries')
-
 
     ax.grid(False)
 
@@ -120,8 +154,27 @@ def generalization_ablation_study():
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
-    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
+    bars1 = ax.bar(
+        x - width/2, 
+        [job_percentage_classifier, stats_percentage_classifier], 
+        width, 
+        edgecolor=CLASSIFIER_COLOR,
+        facecolor=transparent(CLASSIFIER_COLOR, 0.7),
+        label='Classifier',
+        hatch=CLASSIFIER_HATCHING,
+        linewidth=1.5
+    )
+
+    bars2 = ax.bar(
+        x + width/2,
+        [job_percentage_varibo, stats_percentage_varibo], 
+        width, 
+        edgecolor=VARIBO_COLOR,
+        facecolor=transparent(VARIBO_COLOR, 0.7),
+        label='VariBO',
+        hatch=VARIBO_HATCHING,
+        linewidth=1.5
+    )
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -152,6 +205,7 @@ def generalization_ablation_study():
 
     ax.legend(frameon=False)
     plt.tight_layout()
+    plt.title('Speedup over Native in unexplored queries')
 
     plt.savefig('./data/ablation_unexplored.pdf')
 
@@ -172,14 +226,51 @@ def speedup_side_by_side():
     stats_percentage_varibo = (stats_df['Native'].sum() / stats_df[SYSTEM_NAME].sum())#*100
     tpch_percentage_varibo  = (tpch_df['Native'].sum() / tpch_df[SYSTEM_NAME].sum())#*100
 
+    # NativeML % of native
+    job_percentage_nativeml   = (job_df['Native'].sum() / job_df['NativeML'].sum())#*100
+    stats_percentage_nativeml = (stats_df['Native'].sum() / stats_df['NativeML'].sum())#*100
+    tpch_percentage_nativeml  = (tpch_df['Native'].sum() / tpch_df['NativeML'].sum())#*100
+
     labels = ['JOB', 'STATS', 'TPCH']
+
     x = np.arange(len(labels))
     width = 0.25
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    bars1 = ax.bar(x - width, [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier], width, color=CLASSIFIER_COLOR, label='Classifier')
-    bars2 = ax.bar(x,         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], width, color=VARIBO_COLOR, label='VariBO')
+    bars1 = ax.bar(
+        x, 
+        [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier],
+        width, 
+        edgecolor=CLASSIFIER_COLOR,
+        facecolor=transparent(CLASSIFIER_COLOR, 0.7),
+        label='Classifier',
+        hatch=CLASSIFIER_HATCHING,
+        linewidth=1.5
+    )
+    
+    bars2 = ax.bar(
+        x + width,
+        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], 
+        width, 
+        edgecolor=VARIBO_COLOR,
+        facecolor=transparent(VARIBO_COLOR, 0.7),
+        label='VariBO',
+        hatch=VARIBO_HATCHING,
+        linewidth=1.5
+    )
+
+    bars3 = ax.bar(
+        x - width,
+        [job_percentage_nativeml, stats_percentage_nativeml, tpch_percentage_nativeml], 
+        width, 
+        edgecolor=NATIVEML_COLOR,
+        facecolor=transparent(NATIVEML_COLOR, 0.7),
+        label='NativeML',
+        hatch=NATIVEML_HATCHING,
+        linewidth=1.5
+    )
+
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -187,7 +278,7 @@ def speedup_side_by_side():
 
     ax.grid(False)
 
-    ax.set_ylim(0, 1.6)
+    ax.set_ylim(0, 4)
     plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -205,6 +296,7 @@ def speedup_side_by_side():
                 fontsize=9
             )
 
+    label_bars(bars3)
     label_bars(bars1)
     label_bars(bars2)
 
@@ -212,13 +304,7 @@ def speedup_side_by_side():
     plt.tight_layout()
     plt.show()
 
-
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-from matplotlib.patches import Patch
-
-def exploration_graph(input_file: str, ouput_file: str, queries: list):
+def exploration_graph(input_file: str, ouput_file: str, queries: list, ylim):
     table_df = pd.read_csv(input_file, delimiter='\t', usecols=['Native', 'Explored'])
 
     # Speedup / improvement
@@ -231,7 +317,7 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
     baseline = 1.0
 
     # Colors
-    colors = [NATIVE_COLOR if v >= baseline else EXPLORED_COLOR
+    colors = [EXPLORED_COLOR if v >= baseline else NATIVE_COLOR
               for v in table_df['improvement']]
 
     # ---- NEW: bar geometry ----
@@ -252,13 +338,19 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
         range(len(table_df)),
         heights,
         bottom=bottoms,
-        color=colors,
-        width=0.7
+        color=[transparent(color, 0.7) for color in colors],
+        edgecolor=colors,
+        width=0.7,
+        hatch=[EXPLORED_HATCHING if v >= baseline else NATIVE_HATCHING
+              for v in table_df['improvement']]
     )
 
+    ax.set_xlim(-0.5, len(table_df) - 0.5)
     ax.set_xticks(range(len(table_df)))
-    ax.set_xticklabels([f"{q}" for q in queries],
-                       rotation=45, ha='right', fontsize=9)
+    ax.set_xticklabels(
+        [str(q) for q in table_df['query']],
+        rotation=45, ha='right', fontsize=9
+    )
 
     ax.set_xlabel('Query (sorted by improvement)', color='gray')
     ax.set_ylabel('Speedup over Native', color='gray')
@@ -267,7 +359,8 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
     ax.axhline(y=baseline, color='black', linestyle='--', linewidth=1)
 
     # Axis & styling
-    ax.set_ylim(0.75, 3)
+    #ax.set_ylim(ylim)
+
     ax.yaxis.set_major_formatter(
         mticker.FuncFormatter(lambda x, _: f'{x:.2f}x')
     )
@@ -277,8 +370,8 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
     # Legend
     ax.legend(
         handles=[
-            Patch(color='#1D9E75', label='Explored faster'),
-            Patch(color='#D85A30', label='Native faster')
+            Patch(color=EXPLORED_COLOR, label='Explored faster'),
+            Patch(color=NATIVE_COLOR, label='Native faster')
         ],
         frameon=False,
         fontsize=10
@@ -286,20 +379,6 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list):
 
     plt.tight_layout()
     plt.savefig(ouput_file)
-
-def make_job_cumsum():
-    table_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','Classifier',SYSTEM_NAME])
-    table_df = table_df.cumsum()
-    plt.figure()
-    table_df.plot()
-    plt.savefig('./data/job/vis.pdf')
-
-def make_stats_cumsum():
-    table_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','Classifier',SYSTEM_NAME])
-    table_df = table_df.cumsum()
-    plt.figure()
-    table_df.plot()
-    plt.savefig('./data/stats/vis.pdf')
 
 def make_tpch_cumsum():
     tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
@@ -353,14 +432,15 @@ def make_optimization_barchart():
                          usecols=["Optimizer"] + segments)
     opt_df = opt_df.set_index("Optimizer").fillna(0)
 
-    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#009E73']
-
+    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00', ]
+    hatches = ['---', '\\\\\\', '///', 'xx', '||']
+    
     fig, ax = plt.subplots(figsize=(6, 4))
 
     bottoms = np.zeros(len(opt_df))
-    for seg, color in zip(segments, segment_colors):
+    for seg, color, hatch in zip(segments, segment_colors, hatches):
         values = opt_df[seg].values
-        ax.bar(opt_df.index, values, bottom=bottoms, color=color, label=seg)
+        ax.bar(opt_df.index, values, bottom=bottoms, color=transparent(color,0.7), edgecolor=color, hatch=hatch, label=seg)
         bottoms += values
 
     ax.set_ylabel("Optimization time (ms)")
@@ -370,7 +450,7 @@ def make_optimization_barchart():
     plt.tight_layout()
     plt.savefig('./data/optimization/optimization.pdf')
 
-def make_exploration_comparison(varibo_df: DataFrame, random_df: DataFrame, xlim: int, output_file: str):
+def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame, xlim: int, output_file: str):
     for df in (varibo_df, random_df):
         if df['Steps'].iloc[-1] < xlim:
             df.loc[len(df)] = [xlim, df['Runtime'].iloc[-1]]
@@ -390,24 +470,33 @@ def make_exploration_comparison(varibo_df: DataFrame, random_df: DataFrame, xlim
 
 
 def main():
-    #exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30))
+    finetuning_capability_ablation_study()
+    generalization_ablation_study()
+    speedup_side_by_side()
+    make_optimization_barchart()
+    
+    exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30), (0.75, 7))
+    exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', range(0, 30), (0.75, 4))
+    exploration_graph('./data/job/explored.csv', './data/job/explored.pdf', range(0, 30), (0.75, 3))
+    
+    #plt.show()
 
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
     #make_tpch_cumsum()
     #make_optimization_barchart()
 
-    job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    make_exploration_comparison(job_varibo_df, job_random_df, xlim=125, output_file='./data/job/exploration_comparison.pdf')
+    #job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    #job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    #make_exploration_comparison(job_varibo_df, job_random_df, xlim=125, output_file='./data/job/exploration_comparison.pdf')
 
-    tpch_varibo_df = pd.read_csv("./data/tpch/12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    tpch_random_df = pd.read_csv("./data/tpch/random.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    make_exploration_comparison(tpch_varibo_df, tpch_random_df, xlim=50, output_file='./data/tpch/exploration_comparison.pdf')
+    #tpch_varibo_df = pd.read_csv("./data/tpch/12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    #tpch_random_df = pd.read_csv("./data/tpch/random.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    #make_exploration_comparison(tpch_varibo_df, tpch_random_df, xlim=50, output_file='./data/tpch/exploration_comparison.pdf')
 
-    stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    make_exploration_comparison(stats_varibo_df, stats_random_df, xlim=50, output_file='./data/stats/exploration_comparison.pdf')
+    #stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    #stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    #make_exploration_comparison(stats_varibo_df, stats_random_df, xlim=50, output_file='./data/stats/exploration_comparison.pdf')
 
 
 
