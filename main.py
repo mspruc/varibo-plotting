@@ -21,6 +21,23 @@ NATIVEML_HATCHING   = '||'
 
 SYSTEM_NAME = "VariBO"
 
+
+def set_paper_style():
+    plt.rcParams.update({
+        "font.size": 9,            # base font
+        "axes.titlesize": 10,      # title
+        "axes.labelsize": 9,       # axis labels
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 8,
+        "figure.titlesize": 10,
+
+        "lines.linewidth": 1.2,
+        "axes.linewidth": 0.8,
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
+    })
+
 def transparent(color, amount=0.5):
     r, g, b = mcolors.to_rgb(color)
 
@@ -61,7 +78,7 @@ def finetuning_capability_ablation_study():
     stats_percentage_varibo = (stats_explored_df['Native'].sum() / stats_df[SYSTEM_NAME].sum())
     tpch_percentage_varibo  = (tpch_explored_df['Native'].sum() / tpch_df[SYSTEM_NAME].sum())
 
-    labels = ['JOB', 'STATS', 'TPCH']
+    labels = ['JOB', 'STATS', 'TPC-H']
     x = np.arange(len(labels))
     width = 0.25
 
@@ -111,8 +128,7 @@ def finetuning_capability_ablation_study():
                 height + 0.01,
                 f"{height:.2f}x",
                 ha='center',
-                va='bottom',
-                fontsize=9
+                va='bottom'
             )
 
     label_bars(bars1)
@@ -196,16 +212,15 @@ def generalization_ablation_study():
                 height + 0.01,
                 f"{height:.2f}x",
                 ha='center',
-                va='bottom',
-                fontsize=9
+                va='bottom'
             )
 
     label_bars(bars1)
     label_bars(bars2)
 
     ax.legend(frameon=False)
-    plt.tight_layout()
     plt.title('Speedup over Native in unexplored queries')
+    plt.tight_layout()
 
     plt.savefig('./data/ablation_unexplored.pdf')
 
@@ -231,7 +246,7 @@ def speedup_side_by_side():
     stats_percentage_nativeml = (stats_df['Native'].sum() / stats_df['NativeML'].sum())#*100
     tpch_percentage_nativeml  = (tpch_df['Native'].sum() / tpch_df['NativeML'].sum())#*100
 
-    labels = ['JOB', 'STATS', 'TPCH']
+    labels = ['JOB', 'STATS', 'TPC-H']
 
     x = np.arange(len(labels))
     width = 0.25
@@ -292,8 +307,7 @@ def speedup_side_by_side():
                 height + 0.01,
                 f"{height:.2f}x",
                 ha='center',
-                va='bottom',
-                fontsize=9
+                va='bottom'
             )
 
     label_bars(bars3)
@@ -301,26 +315,22 @@ def speedup_side_by_side():
     label_bars(bars2)
 
     ax.legend(frameon=False)
+    plt.set_title("Speedup ratio over native with each model on JOB, STATS and TPC-H")
     plt.tight_layout()
-    plt.show()
+    plt.savefig("./data/speedups.pdf")
 
 def exploration_graph(input_file: str, ouput_file: str, queries: list, ylim):
-    table_df = pd.read_csv(input_file, delimiter='\t', usecols=['Native', 'Explored'])
-
-    # Speedup / improvement
+    table_df                = pd.read_csv(input_file, delimiter='\t', usecols=['Native', 'Explored'])
     table_df['improvement'] = table_df['Native'] / table_df['Explored']
-    table_df['query'] = table_df.index
+    table_df['query']       = table_df.index
 
-    # Sort best to worst
     table_df = table_df.sort_values('improvement', ascending=False).reset_index(drop=True)
 
     baseline = 1.0
 
-    # Colors
     colors = [EXPLORED_COLOR if v >= baseline else NATIVE_COLOR
               for v in table_df['improvement']]
 
-    # ---- NEW: bar geometry ----
     bottoms = []
     heights = []
 
@@ -332,7 +342,7 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list, ylim):
             bottoms.append(v)
             heights.append(baseline - v)
 
-    fig, ax = plt.subplots(figsize=(14, 5))
+    fig, ax = plt.subplots(figsize=(7, 4))
 
     ax.bar(
         range(len(table_df)),
@@ -349,17 +359,13 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list, ylim):
     ax.set_xticks(range(len(table_df)))
     ax.set_xticklabels(
         [str(q) for q in table_df['query']],
-        rotation=45, ha='right', fontsize=9
+        rotation=45
     )
 
-    ax.set_xlabel('Query (sorted by improvement)', color='gray')
-    ax.set_ylabel('Speedup over Native', color='gray')
+    ax.set_xlabel('Query (sorted by improvement)')
+    ax.set_ylabel('Speedup over Native')
 
-    # Baseline at 1×
     ax.axhline(y=baseline, color='black', linestyle='--', linewidth=1)
-
-    # Axis & styling
-    #ax.set_ylim(ylim)
 
     ax.yaxis.set_major_formatter(
         mticker.FuncFormatter(lambda x, _: f'{x:.2f}x')
@@ -367,22 +373,30 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list, ylim):
 
     ax.spines[['top', 'right']].set_visible(False)
 
-    # Legend
     ax.legend(
         handles=[
-            Patch(color=EXPLORED_COLOR, label='Explored faster'),
-            Patch(color=NATIVE_COLOR, label='Native faster')
+            Patch(
+                facecolor=transparent(EXPLORED_COLOR, 0.7),
+                edgecolor=EXPLORED_COLOR,
+                hatch=EXPLORED_HATCHING,
+                label='Explored faster'
+            ),
+            Patch(
+                facecolor=transparent(NATIVE_COLOR, 0.7),
+                edgecolor=NATIVE_COLOR,
+                hatch=NATIVE_HATCHING,
+                label='Native faster'
+            )
         ],
         frameon=False,
-        fontsize=10
     )
 
     plt.tight_layout()
-    plt.savefig(ouput_file)
+    plt.savefig(ouput_file, dpi=300)
 
 def make_tpch_cumsum():
-    tpch_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
-    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
+    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
+    job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
     stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
 
     def speedups(df):
@@ -416,7 +430,7 @@ def make_tpch_cumsum():
         for bar in bars:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width() / 2, height + 0.01, f"{height:.2f}x",
-                    ha='center', va='bottom', fontsize=9)
+                    ha='center', va='bottom')
 
     label_bars(bars1)
     label_bars(bars2)
@@ -435,7 +449,7 @@ def make_optimization_barchart():
     segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00', ]
     hatches = ['---', '\\\\\\', '///', 'xx', '||']
     
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(7, 4))
 
     bottoms = np.zeros(len(opt_df))
     for seg, color, hatch in zip(segments, segment_colors, hatches):
@@ -455,7 +469,7 @@ def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame
         if df['Steps'].iloc[-1] < xlim:
             df.loc[len(df)] = [xlim, df['Runtime'].iloc[-1]]
 
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(varibo_df['Steps'], varibo_df['Runtime'], color=VARIBO_COLOR, label='VariBO')
     ax.plot(random_df['Steps'], random_df['Runtime'], color=CLASSIFIER_COLOR, label='Random')
 
@@ -470,6 +484,7 @@ def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame
 
 
 def main():
+    set_paper_style()
     finetuning_capability_ablation_study()
     generalization_ablation_study()
     speedup_side_by_side()
