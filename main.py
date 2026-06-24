@@ -8,7 +8,7 @@ import numpy as np
 plt.close("all")
 
 EXPLORED_COLOR   = '#0072B2'
-CLASSIFIER_COLOR = '#E69F00' 
+CLASSIFIER_COLOR = '#E69F00'
 VARIBO_COLOR     = "#009E73"
 NATIVE_COLOR     = "#D55E00"
 NATIVEML_COLOR   = "#CC79A7"
@@ -44,7 +44,7 @@ def transparent(color, amount=0.5):
     r = 1 - (1 - r) * (1 - amount)
     g = 1 - (1 - g) * (1 - amount)
     b = 1 - (1 - b) * (1 - amount)
-    
+
     return (r, g, b)
 
 # shows speed up ratio over each benchmark compared to native
@@ -171,9 +171,9 @@ def generalization_ablation_study():
     fig, ax = plt.subplots(figsize=(7, 4))
 
     bars1 = ax.bar(
-        x - width/2, 
-        [job_percentage_classifier, stats_percentage_classifier], 
-        width, 
+        x - width/2,
+        [job_percentage_classifier, stats_percentage_classifier],
+        width,
         edgecolor=CLASSIFIER_COLOR,
         facecolor=transparent(CLASSIFIER_COLOR, 0.7),
         label='Classifier',
@@ -183,8 +183,8 @@ def generalization_ablation_study():
 
     bars2 = ax.bar(
         x + width/2,
-        [job_percentage_varibo, stats_percentage_varibo], 
-        width, 
+        [job_percentage_varibo, stats_percentage_varibo],
+        width,
         edgecolor=VARIBO_COLOR,
         facecolor=transparent(VARIBO_COLOR, 0.7),
         label='VariBO',
@@ -254,20 +254,20 @@ def speedup_side_by_side():
     fig, ax = plt.subplots(figsize=(7, 4))
 
     bars1 = ax.bar(
-        x, 
+        x,
         [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier],
-        width, 
+        width,
         edgecolor=CLASSIFIER_COLOR,
         facecolor=transparent(CLASSIFIER_COLOR, 0.7),
         label='Classifier',
         hatch=CLASSIFIER_HATCHING,
         linewidth=1.5
     )
-    
+
     bars2 = ax.bar(
         x + width,
-        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo], 
-        width, 
+        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo],
+        width,
         edgecolor=VARIBO_COLOR,
         facecolor=transparent(VARIBO_COLOR, 0.7),
         label='VariBO',
@@ -277,8 +277,8 @@ def speedup_side_by_side():
 
     bars3 = ax.bar(
         x - width,
-        [job_percentage_nativeml, stats_percentage_nativeml, tpch_percentage_nativeml], 
-        width, 
+        [job_percentage_nativeml, stats_percentage_nativeml, tpch_percentage_nativeml],
+        width,
         edgecolor=NATIVEML_COLOR,
         facecolor=transparent(NATIVEML_COLOR, 0.7),
         label='NativeML',
@@ -448,7 +448,7 @@ def make_optimization_barchart():
 
     segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00', ]
     hatches = ['---', '\\\\\\', '///', 'xx', '||']
-    
+
     fig, ax = plt.subplots(figsize=(7, 4))
 
     bottoms = np.zeros(len(opt_df))
@@ -463,6 +463,29 @@ def make_optimization_barchart():
     ax.legend(frameon=False, loc='upper left')
     plt.tight_layout()
     plt.savefig('./data/optimization/optimization.pdf')
+
+def make_optimization_linechart():
+    cost_df   = pd.read_csv("./data/optimization/files/table_cost.csv",   sep=r'\s+')
+    native_df = pd.read_csv("./data/optimization/files/table_native.csv", sep=r'\s+')
+    varibo_df = pd.read_csv("./data/optimization/files/table_varibo.csv", sep=r'\s+')
+
+    operators     = native_df['Operators']
+    cost_factor   = native_df['Time'].values / cost_df['Time'].values
+    varibo_factor = native_df['Time'].values / varibo_df['Time'].values
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    ax.axhline(y=1.0, color='black', linestyle='--', linewidth=0.8, label='Native')
+    ax.plot(operators, cost_factor,   color=NATIVEML_COLOR, label='Cost',   linewidth=1.5)
+    ax.plot(operators, varibo_factor, color=VARIBO_COLOR,   label='VariBO', linewidth=1.5)
+
+    ax.set_xlabel('Number of operators')
+    ax.set_ylabel('Speedup over Native')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(frameon=False)
+    plt.tight_layout()
+    plt.savefig('./data/optimization/linechart.pdf')
 
 def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame, xlim: int, output_file: str):
     for df in (varibo_df, random_df):
@@ -485,15 +508,18 @@ def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame
 
 def main():
     set_paper_style()
+    """
     finetuning_capability_ablation_study()
     generalization_ablation_study()
     speedup_side_by_side()
     make_optimization_barchart()
-    
+
     exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30), (0.75, 7))
     exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', range(0, 30), (0.75, 4))
     exploration_graph('./data/job/explored.csv', './data/job/explored.pdf', range(0, 30), (0.75, 3))
-    
+    """
+    make_optimization_linechart()
+
     #plt.show()
 
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
@@ -520,3 +546,4 @@ if __name__ == "__main__":
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
     main()
     #finetuning_capability_ablation_study()
+

@@ -1,0 +1,6 @@
+Encoding: 8
+Inference: 16
+Unpacking: 167
+Decoding: 0
+# of operators: 41
+Conversion: 58
