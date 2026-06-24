@@ -475,8 +475,8 @@ def make_optimization_linechart():
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    ax.axhline(y=1.0, color='black', linestyle='--', linewidth=0.8, label='Native')
-    ax.plot(operators, cost_factor,   color=NATIVEML_COLOR, label='Cost',   linewidth=1.5)
+    ax.axhline(y=1.0, color=NATIVE_COLOR, linestyle='--', linewidth=0.8, label='Native')
+    ax.plot(operators, cost_factor,   color=NATIVEML_COLOR, label='NativeML',   linewidth=1.5)
     ax.plot(operators, varibo_factor, color=VARIBO_COLOR,   label='VariBO', linewidth=1.5)
 
     ax.set_xlabel('Number of operators')
