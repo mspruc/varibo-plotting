@@ -21,16 +21,15 @@ NATIVEML_HATCHING   = '||'
 
 SYSTEM_NAME = "VariBO"
 
-
 def set_paper_style():
     plt.rcParams.update({
-        "font.size": 9,            # base font
-        "axes.titlesize": 10,      # title
-        "axes.labelsize": 9,       # axis labels
-        "xtick.labelsize": 8,
-        "ytick.labelsize": 8,
-        "legend.fontsize": 8,
-        "figure.titlesize": 10,
+        "font.size": 9 * 1.5,            # base font
+        "axes.titlesize": 10 * 2,      # title
+        "axes.labelsize": 9 * 2,       # axis labels
+        "xtick.labelsize": 8 * 2,
+        "ytick.labelsize": 8 * 2,
+        "legend.fontsize": 8 * 2,
+        "figure.titlesize": 10 * 2,
 
         "lines.linewidth": 1.2,
         "axes.linewidth": 0.8,
@@ -78,14 +77,30 @@ def finetuning_capability_ablation_study():
     stats_percentage_varibo = (stats_explored_df['Native'].sum() / stats_df[SYSTEM_NAME].sum())
     tpch_percentage_varibo  = (tpch_explored_df['Native'].sum() / tpch_df[SYSTEM_NAME].sum())
 
-    labels = ['JOB', 'STATS', 'TPC-H']
+    # nativeml % of native
+    job_percentage_nativeml   = (job_explored_df['Native'].sum() / job_df['NativeML'].sum())
+    stats_percentage_nativeml = (stats_explored_df['Native'].sum() / stats_df['NativeML'].sum())
+    tpch_percentage_nativeml  = (tpch_explored_df['Native'].sum() / tpch_df['NativeML'].sum())
+
+    labels = ['JOB-C', 'STATS', 'TPC-H']
     x = np.arange(len(labels))
     width = 0.25
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
     bars1 = ax.bar(
-        x - width/2,
+        x - width,
+        [job_percentage_nativeml, stats_percentage_nativeml, tpch_percentage_nativeml],
+        width,
+        edgecolor=NATIVEML_COLOR,
+        facecolor=transparent(NATIVEML_COLOR, 0.7),
+        hatch=NATIVEML_HATCHING,
+        linewidth=1.5,
+        label='NativeML'
+    )
+
+    bars2 = ax.bar(
+        x,
         [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier],
         width,
         edgecolor=CLASSIFIER_COLOR,
@@ -95,8 +110,8 @@ def finetuning_capability_ablation_study():
         label='Classifier'
     )
 
-    bars2 = ax.bar(
-        x + width/2,
+    bars3 = ax.bar(
+        x + width,
         [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo],
         width,
         edgecolor=VARIBO_COLOR,
@@ -108,13 +123,11 @@ def finetuning_capability_ablation_study():
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_ylabel('Speedup ratio over Native')
-
-    plt.title('Speedup over Native in explored queries')
+    #ax.set_ylabel('Speedup ratio over Native')
 
     ax.grid(False)
 
-    ax.set_ylim(0, 7.5)
+    ax.set_ylim(0, 7)
     plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -133,10 +146,11 @@ def finetuning_capability_ablation_study():
 
     label_bars(bars1)
     label_bars(bars2)
+    label_bars(bars3)
 
-    ax.legend(frameon=False)
+    #ax.legend(frameon=False)
     plt.tight_layout()
-    plt.savefig('./data/ablation.pdf')
+    plt.savefig('./data/ablation_explored.pdf')
 
 
 # shows speed up ratio over each benchmark compared to native
@@ -157,6 +171,10 @@ def generalization_ablation_study():
     stats_df = restrict_to_not_explored(stats_df, stats_explored_df)
 
     # classifier % of native
+    job_percentage_nativeml   = (job_df['Native'].sum() / job_df['NativeML'].sum())
+    stats_percentage_nativeml = (stats_df['Native'].sum() / stats_df['NativeML'].sum())
+
+    # classifier % of native
     job_percentage_classifier   = (job_df['Native'].sum() / job_df['Classifier'].sum())
     stats_percentage_classifier = (stats_df['Native'].sum() / stats_df['Classifier'].sum())
 
@@ -164,14 +182,28 @@ def generalization_ablation_study():
     job_percentage_varibo   = (job_df['Native'].sum() / job_df[SYSTEM_NAME].sum())
     stats_percentage_varibo = (stats_df['Native'].sum() / stats_df[SYSTEM_NAME].sum())
 
-    labels = ['JOB', 'STATS']
-    x = np.arange(len(labels))
-    width = 0.25
+    labels = ['JOB-C', 'STATS']
+    x = np.array([0,0.5])
+    width = 0.25 * (1/2)
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
+    ax.set_xlim(-0.4, 1.0)
+    ax.set_ylim(0, 7)
+
     bars1 = ax.bar(
-        x - width/2,
+        x - width,
+        [job_percentage_nativeml, stats_percentage_nativeml],
+        width,
+        edgecolor=NATIVEML_COLOR,
+        facecolor=transparent(NATIVEML_COLOR, 0.7),
+        label='NativeML',
+        hatch=NATIVEML_HATCHING,
+        linewidth=1.5
+    )
+
+    bars2 = ax.bar(
+        x,
         [job_percentage_classifier, stats_percentage_classifier],
         width,
         edgecolor=CLASSIFIER_COLOR,
@@ -181,8 +213,8 @@ def generalization_ablation_study():
         linewidth=1.5
     )
 
-    bars2 = ax.bar(
-        x + width/2,
+    bars3 = ax.bar(
+        x + width,
         [job_percentage_varibo, stats_percentage_varibo],
         width,
         edgecolor=VARIBO_COLOR,
@@ -194,11 +226,11 @@ def generalization_ablation_study():
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_ylabel('Speedup ratio over Native')
+    #ax.set_ylabel('Speedup ratio over Native')
 
     ax.grid(False)
 
-    ax.set_ylim(0, 3.5)
+    ax.set_ylim(0, 7)
     plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -217,9 +249,9 @@ def generalization_ablation_study():
 
     label_bars(bars1)
     label_bars(bars2)
+    label_bars(bars3)
 
     ax.legend(frameon=False)
-    plt.title('Speedup over Native in unexplored queries')
     plt.tight_layout()
 
     plt.savefig('./data/ablation_unexplored.pdf')
@@ -246,7 +278,7 @@ def speedup_side_by_side():
     stats_percentage_nativeml = (stats_df['Native'].sum() / stats_df['NativeML'].sum())#*100
     tpch_percentage_nativeml  = (tpch_df['Native'].sum() / tpch_df['NativeML'].sum())#*100
 
-    labels = ['JOB', 'STATS', 'TPC-H']
+    labels = ['JOB-C', 'STATS', 'TPC-H']
 
     x = np.arange(len(labels))
     width = 0.25
@@ -314,8 +346,8 @@ def speedup_side_by_side():
     label_bars(bars1)
     label_bars(bars2)
 
-    ax.legend(frameon=False)
-    plt.set_title("Speedup ratio over native with each model on JOB, STATS and TPC-H")
+    #ax.legend(frameon=False)
+    #plt.set_title("Speedup ratio over native with each model on JOB-C, STATS and TPC-H")
     plt.tight_layout()
     plt.savefig("./data/speedups.pdf")
 
@@ -407,7 +439,7 @@ def make_tpch_cumsum():
     stats_native_ml, stats_classifier, stats_varibo = speedups(stats_df)
     tpch_native_ml, tpch_classifier,  tpch_varibo  = speedups(tpch_df)
 
-    labels = ['JOB', 'STATS', 'TPC-H']
+    labels = ['JOB-C', 'STATS', 'TPC-H']
     x = np.arange(len(labels))
     width = 0.25
 
@@ -442,50 +474,72 @@ def make_tpch_cumsum():
 
 def make_optimization_barchart():
     segments = ["Encoding", "Inference", "Unpacking", "Decoding", "Enumeration"]
-    opt_df = pd.read_csv("./data/optimization/table.csv", delimiter='\t',
-                         usecols=["Optimizer"] + segments)
-    opt_df = opt_df.set_index("Optimizer").fillna(0)
-
-    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00', ]
+    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00']
     hatches = ['---', '\\\\\\', '///', 'xx', '||']
 
-    fig, ax = plt.subplots(figsize=(7, 4))
+    datasets = [
+        ("job",   "JOB-C"),
+        ("stats", "STATS"),
+        ("tpch",  "TPC-H"),
+    ]
 
-    bottoms = np.zeros(len(opt_df))
-    for seg, color, hatch in zip(segments, segment_colors, hatches):
-        values = opt_df[seg].values
-        ax.bar(opt_df.index, values, bottom=bottoms, color=transparent(color,0.7), edgecolor=color, hatch=hatch, label=seg)
-        bottoms += values
+    for dataset, label in datasets:
+        opt_df = pd.read_csv(f"./data/optimization/files/table_barchart_{dataset}.csv",
+                             delimiter='\t', usecols=["Optimizer"] + segments)
+        opt_df = opt_df.set_index("Optimizer").fillna(0)
 
-    ax.set_ylabel("Optimization time (ms)")
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.legend(frameon=False, loc='upper left')
-    plt.tight_layout()
-    plt.savefig('./data/optimization/optimization.pdf')
+        fig, ax = plt.subplots(figsize=(7, 4))
+
+        bottoms = np.zeros(len(opt_df))
+        for seg, color, hatch in zip(segments, segment_colors, hatches):
+            values = opt_df[seg].values
+            ax.bar(opt_df.index, values, bottom=bottoms, color=transparent(color, 0.7), edgecolor=color, hatch=hatch, label=seg)
+            bottoms += values
+
+        for i, total in enumerate(bottoms):
+            ax.text(i, total, f'{total:.1f}', ha='center', va='bottom', fontsize=8)
+
+        ax.set_ylabel("Optimization time (ms)")
+        ax.set_title(label)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.legend(frameon=False, loc='upper left')
+        plt.tight_layout()
+        plt.savefig(f'./data/optimization/barchart_{dataset}.pdf')
+        plt.close(fig)
 
 def make_optimization_linechart():
-    cost_df   = pd.read_csv("./data/optimization/files/table_cost.csv",   sep=r'\s+')
-    native_df = pd.read_csv("./data/optimization/files/table_native.csv", sep=r'\s+')
-    varibo_df = pd.read_csv("./data/optimization/files/table_varibo.csv", sep=r'\s+')
+    base = "./data/optimization/files/optimizations"
+    datasets = [
+        ("job",   "JOB-C"),
+        ("stats", "STATS"),
+        ("tpch",  "TPC-H"),
+    ]
 
-    operators     = native_df['Operators']
-    cost_factor   = native_df['Time'].values / cost_df['Time'].values
-    varibo_factor = native_df['Time'].values / varibo_df['Time'].values
+    for dataset, label in datasets:
+        native_df = pd.read_csv(f"{base}/native/{dataset}/table.csv", sep=r'\s+')
+        cost_df   = pd.read_csv(f"{base}/cost/{dataset}/table.csv",   sep=r'\s+')
+        varibo_df = pd.read_csv(f"{base}/{dataset}/table.csv",        sep=r'\s+')
 
-    fig, ax = plt.subplots(figsize=(7, 4))
+        operators     = native_df['Operators']
+        cost_factor   = native_df['Time'].values / cost_df['Time'].values
+        varibo_factor = native_df['Time'].values / varibo_df['Time'].values
 
-    ax.axhline(y=1.0, color=NATIVE_COLOR, linestyle='--', linewidth=0.8, label='Native')
-    ax.plot(operators, cost_factor,   color=NATIVEML_COLOR, label='NativeML',   linewidth=1.5)
-    ax.plot(operators, varibo_factor, color=VARIBO_COLOR,   label='VariBO', linewidth=1.5)
+        fig, ax = plt.subplots(figsize=(7, 4))
 
-    ax.set_xlabel('Number of operators')
-    ax.set_ylabel('Speedup over Native')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig('./data/optimization/linechart.pdf')
+        ax.axhline(y=1.0, color=NATIVE_COLOR, linestyle='--', linewidth=0.8, label='Native')
+        ax.plot(operators, cost_factor,   color=NATIVEML_COLOR, label='NativeML', linewidth=1.5)
+        ax.plot(operators, varibo_factor, color=VARIBO_COLOR,   label='VariBO',   linewidth=1.5)
+
+        ax.set_xlabel('Number of operators')
+        ax.set_ylabel('Speedup over Native')
+        ax.set_title(label)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.legend(frameon=False, loc="upper left")
+        plt.tight_layout()
+        plt.savefig(f'./data/optimization/linechart_{dataset}.pdf')
+        plt.close(fig)
 
 def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame, xlim: int, output_file: str):
     for df in (varibo_df, random_df):
@@ -508,16 +562,16 @@ def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame
 
 def main():
     set_paper_style()
-    """
     finetuning_capability_ablation_study()
     generalization_ablation_study()
     speedup_side_by_side()
-    make_optimization_barchart()
 
+    """
     exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30), (0.75, 7))
     exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', range(0, 30), (0.75, 4))
     exploration_graph('./data/job/explored.csv', './data/job/explored.pdf', range(0, 30), (0.75, 3))
     """
+    make_optimization_barchart()
     make_optimization_linechart()
 
     #plt.show()
