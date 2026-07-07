@@ -1,0 +1,4 @@
+Optimizer	Encoding	Inference	Unpacking	Decoding	Enumeration
+Native					123
+NativeML	4	400	20	100	1139
+VariBO	4	11	5	1	29

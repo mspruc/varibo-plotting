@@ -251,7 +251,7 @@ def generalization_ablation_study():
     label_bars(bars2)
     label_bars(bars3)
 
-    ax.legend(frameon=False)
+    #ax.legend(frameon=False)
     plt.tight_layout()
 
     plt.savefig('./data/ablation_unexplored.pdf')
@@ -325,7 +325,8 @@ def speedup_side_by_side():
 
     ax.grid(False)
 
-    ax.set_ylim(0, 4)
+    ax.legend(frameon=False, loc="upper left")
+    ax.set_ylim(0, 7)
     plt.yticks([])
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -500,7 +501,7 @@ def make_optimization_barchart():
             ax.text(i, total, f'{total:.1f}', ha='center', va='bottom', fontsize=8)
 
         ax.set_ylabel("Optimization time (ms)")
-        ax.set_title(label)
+        #ax.set_title(label)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.legend(frameon=False, loc='upper left')
@@ -533,32 +534,77 @@ def make_optimization_linechart():
 
         ax.set_xlabel('Number of operators')
         ax.set_ylabel('Speedup over Native')
-        ax.set_title(label)
+        #ax.set_title(label)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.legend(frameon=False, loc="upper left")
+        ax.legend(
+            frameon=False,
+            loc="lower center",
+            bbox_to_anchor=(0.5, 1.0),
+            ncol=3,
+        )
         plt.tight_layout()
         plt.savefig(f'./data/optimization/linechart_{dataset}.pdf')
         plt.close(fig)
 
-def make_exploration_comparison(varibo_df: pd.DataFrame, random_df: pd.DataFrame, xlim: int, output_file: str):
+def make_exploration_comparison(varibo_df: pd.DataFrame,
+                                random_df: pd.DataFrame,
+                                xlim: int,
+                                output_file: str):
+
     for df in (varibo_df, random_df):
+        df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%H:%M:%S")
+        df.sort_values("Timestamp", inplace=True)
+
+        df["Runtime"] = df["Runtime"] / 1000.0 #convert runtime to s
+
+        start_time = df["Timestamp"].iloc[0]
+        df["Elapsed"] = (df["Timestamp"] - start_time).dt.total_seconds()
+
         if df['Steps'].iloc[-1] < xlim:
-            df.loc[len(df)] = [xlim, df['Runtime'].iloc[-1]]
+            df.loc[len(df)] = {
+                "Timestamp": df["Timestamp"].iloc[-1],
+                "Steps": xlim,
+                "Runtime": df["Runtime"].iloc[-1],
+                "Elapsed": df["Elapsed"].iloc[-1]
+            }
 
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(varibo_df['Steps'], varibo_df['Runtime'], color=VARIBO_COLOR, label='VariBO')
-    ax.plot(random_df['Steps'], random_df['Runtime'], color=CLASSIFIER_COLOR, label='Random')
 
-    ax.set_xlim(0, xlim)
-    ax.set_xlabel('Steps')
-    ax.set_ylabel('Execution time (ms)')
+    ax.plot(varibo_df['Elapsed'], varibo_df['Runtime'],
+            marker='o', color=VARIBO_COLOR, label='VariBO')
+
+    ax.plot(random_df['Elapsed'], random_df['Runtime'],
+            marker='o', color=CLASSIFIER_COLOR, label='Random')
+
+    texts = []
+
+    for df, color in [(varibo_df, VARIBO_COLOR), (random_df, CLASSIFIER_COLOR)]:
+        for _, row in df.iterrows():
+            texts.append(
+                ax.text(
+                    row["Elapsed"],
+                    row["Runtime"],
+                    str(row["Steps"]),
+                    fontsize=12,
+                    color=color
+                )
+            )
+
+    adjust_text(
+        texts,
+        ax=ax
+    )
+
+    ax.set_xlabel("Time since start (s)")
+    ax.set_ylabel("Best-found plan runtime (s)")
+
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.legend(frameon=False)
+
     plt.tight_layout()
     plt.savefig(output_file)
-
 
 def main():
     set_paper_style()

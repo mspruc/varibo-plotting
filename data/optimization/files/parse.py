@@ -92,6 +92,7 @@ def parse_avg_segments_time():
             print(f"# {optimizer}_{benchmark}")
             print("Segment\tTime")
             for segment, times in sorted(segment_times.items()):
+                #print(f"{segment}\t{(sum(times) / len(times)):.2f}")
                 print(f"{segment}\t{median(times):.2f}")
             print()
 
