@@ -122,14 +122,14 @@ def finetuning_capability_ablation_study():
     )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels)
+    ax.set_xticklabels(labels, size=9*4)
     #ax.set_ylabel('Speedup ratio over Native')
 
     ax.grid(False)
 
     ax.set_ylim(0, 7)
-    plt.yticks([])
-    ax.spines['left'].set_visible(False)
+    #plt.yticks([])
+    #ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -225,14 +225,14 @@ def generalization_ablation_study():
     )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels)
+    ax.set_xticklabels(labels, size=9*4)
     #ax.set_ylabel('Speedup ratio over Native')
 
     ax.grid(False)
 
     ax.set_ylim(0, 7)
-    plt.yticks([])
-    ax.spines['left'].set_visible(False)
+    #plt.yticks([])
+    #ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -293,21 +293,10 @@ def speedup_side_by_side():
         facecolor=transparent(CLASSIFIER_COLOR, 0.7),
         label='Classifier',
         hatch=CLASSIFIER_HATCHING,
-        linewidth=1.5
+        linewidth=1.5,
     )
 
     bars2 = ax.bar(
-        x + width,
-        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo],
-        width,
-        edgecolor=VARIBO_COLOR,
-        facecolor=transparent(VARIBO_COLOR, 0.7),
-        label='VariBO',
-        hatch=VARIBO_HATCHING,
-        linewidth=1.5
-    )
-
-    bars3 = ax.bar(
         x - width,
         [job_percentage_nativeml, stats_percentage_nativeml, tpch_percentage_nativeml],
         width,
@@ -318,17 +307,27 @@ def speedup_side_by_side():
         linewidth=1.5
     )
 
+    bars3 = ax.bar(
+        x + width,
+        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo],
+        width,
+        edgecolor=VARIBO_COLOR,
+        facecolor=transparent(VARIBO_COLOR, 0.7),
+        label='VariBO',
+        hatch=VARIBO_HATCHING,
+        linewidth=1.5,
+    )
+
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.set_ylabel('Speedup ratio over Native')
-
+    ax.set_xticklabels(labels, size=9 * 4)
+    ax.set_ylabel('Speedup ratio over Native', size=8 * 2.5, loc='top')
     ax.grid(False)
 
-    ax.legend(frameon=False, loc="upper left")
+    ax.legend(frameon=False, loc="upper left", fontsize=8 * 3,ncol=2)
     ax.set_ylim(0, 7)
-    plt.yticks([])
-    ax.spines['left'].set_visible(False)
+    #plt.yticks([])
+    #ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -343,9 +342,9 @@ def speedup_side_by_side():
                 va='bottom'
             )
 
-    label_bars(bars3)
     label_bars(bars1)
     label_bars(bars2)
+    label_bars(bars3)
 
     #ax.legend(frameon=False)
     #plt.set_title("Speedup ratio over native with each model on JOB-C, STATS and TPC-H")
@@ -484,30 +483,41 @@ def make_optimization_barchart():
         ("tpch",  "TPC-H"),
     ]
 
+    opt_dfs = []
     for dataset, label in datasets:
         opt_df = pd.read_csv(f"./data/optimization/files/table_barchart_{dataset}.csv",
                              delimiter='\t', usecols=["Optimizer"] + segments)
         opt_df = opt_df.set_index("Optimizer").fillna(0)
+        opt_dfs.append(opt_df)
 
-        fig, ax = plt.subplots(figsize=(7, 4))
+    avg_df = sum(opt_dfs) / len(opt_dfs)
 
-        bottoms = np.zeros(len(opt_df))
-        for seg, color, hatch in zip(segments, segment_colors, hatches):
-            values = opt_df[seg].values
-            ax.bar(opt_df.index, values, bottom=bottoms, color=transparent(color, 0.7), edgecolor=color, hatch=hatch, label=seg)
-            bottoms += values
+    fig, ax = plt.subplots(figsize=(7, 4))
 
-        for i, total in enumerate(bottoms):
-            ax.text(i, total, f'{total:.1f}', ha='center', va='bottom', fontsize=8)
+    bottoms = np.zeros(len(avg_df))
+    for seg, color, hatch in zip(segments, segment_colors, hatches):
+        values = avg_df[seg].values
+        ax.bar(avg_df.index, values, bottom=bottoms, color=transparent(color, 0.7), edgecolor=color, hatch=hatch, label=seg)
+        bottoms += values
 
-        ax.set_ylabel("Optimization time (ms)")
-        #ax.set_title(label)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.legend(frameon=False, loc='upper left')
-        plt.tight_layout()
-        plt.savefig(f'./data/optimization/barchart_{dataset}.pdf')
-        plt.close(fig)
+    for i, total in enumerate(bottoms):
+        ax.text(i, total, f'{total:.1f}', ha='center', va='bottom', fontsize=9 * 1.5)
+
+    ax.set_ylabel("Optimization time (ms)")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    #ax.legend(frameon=False, loc='upper right')
+
+    ax.legend(
+        frameon=False,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.0),
+        ncol=3,
+    )
+
+    plt.tight_layout()
+    plt.savefig('./data/optimization/optimization.pdf')
+    plt.close(fig)
 
 def make_optimization_linechart():
     base = "./data/optimization/files/optimizations"
