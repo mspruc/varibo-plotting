@@ -263,6 +263,11 @@ def speedup_side_by_side():
     stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
     tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t')
 
+    # postgres_fdw % of native
+    job_percentage_postgres = (job_df['Native'].sum() / job_df['Postgres_fdw'].sum())#*100
+    stats_percentage_postgres = (stats_df['Native'].sum() / stats_df['NativeML'].sum())#*100
+    tpch_percentage_postgres  = (tpch_df['Native'].sum() / tpch_df['NativeML'].sum())#*100
+
     # classifier % of native
     job_percentage_classifier   = (job_df['Native'].sum() / job_df['Classifier'].sum())#*100
     stats_percentage_classifier = (stats_df['Native'].sum() / stats_df['Classifier'].sum())#*100
@@ -286,6 +291,17 @@ def speedup_side_by_side():
     fig, ax = plt.subplots(figsize=(7, 4))
 
     bars1 = ax.bar(
+        x - 2 * width,
+        [job_percentage_postgres, stats_percentage_nativeml, tpch_percentage_nativeml],
+        width,
+        edgecolor=EXPLORED_COLOR,
+        facecolor=transparent(EXPLORED_COLOR, 0.7),
+        label='Postgres_fdw',
+        hatch=EXPLORED_HATCHING,
+        linewidth=1.5
+    )
+
+    bars2 = ax.bar(
         x,
         [job_percentage_classifier, stats_percentage_classifier, tpch_percentage_classifier],
         width,
@@ -296,7 +312,18 @@ def speedup_side_by_side():
         linewidth=1.5,
     )
 
-    bars2 = ax.bar(
+    bars3 = ax.bar(
+        x + width,
+        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo],
+        width,
+        edgecolor=VARIBO_COLOR,
+        facecolor=transparent(VARIBO_COLOR, 0.7),
+        label='VariBO',
+        hatch=VARIBO_HATCHING,
+        linewidth=1.5
+    )
+
+    bars4 = ax.bar(
         x - width,
         [job_percentage_nativeml, stats_percentage_nativeml, tpch_percentage_nativeml],
         width,
@@ -306,18 +333,6 @@ def speedup_side_by_side():
         hatch=NATIVEML_HATCHING,
         linewidth=1.5
     )
-
-    bars3 = ax.bar(
-        x + width,
-        [job_percentage_varibo, stats_percentage_varibo, tpch_percentage_varibo],
-        width,
-        edgecolor=VARIBO_COLOR,
-        facecolor=transparent(VARIBO_COLOR, 0.7),
-        label='VariBO',
-        hatch=VARIBO_HATCHING,
-        linewidth=1.5,
-    )
-
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, size=9 * 4)
@@ -345,6 +360,7 @@ def speedup_side_by_side():
     label_bars(bars1)
     label_bars(bars2)
     label_bars(bars3)
+    label_bars(bars4)
 
     #ax.legend(frameon=False)
     #plt.set_title("Speedup ratio over native with each model on JOB-C, STATS and TPC-H")
@@ -618,17 +634,17 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
 
 def main():
     set_paper_style()
-    finetuning_capability_ablation_study()
-    generalization_ablation_study()
+    #finetuning_capability_ablation_study()
+    #generalization_ablation_study()
     speedup_side_by_side()
 
     """
     exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30), (0.75, 7))
     exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', range(0, 30), (0.75, 4))
     exploration_graph('./data/job/explored.csv', './data/job/explored.pdf', range(0, 30), (0.75, 3))
-    """
     make_optimization_barchart()
     make_optimization_linechart()
+    """
 
     #plt.show()
 
