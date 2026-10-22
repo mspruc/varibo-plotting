@@ -13,12 +13,14 @@ CLASSIFIER_COLOR = '#E69F00'
 VARIBO_COLOR     = "#009E73"
 NATIVE_COLOR     = "#D55E00"
 NATIVEML_COLOR   = "#CC79A7"
+SPARK_COLOR      = "#56B4E9"
 
 EXPLORED_HATCHING   = '---'
 CLASSIFIER_HATCHING = '\\\\\\'
 VARIBO_HATCHING     = '///'
 NATIVE_HATCHING     = 'xx'
 NATIVEML_HATCHING   = '||'
+SPARK_HATCHING      = '..'
 
 SYSTEM_NAME = "VariBO"
 
@@ -123,7 +125,7 @@ def finetuning_capability_ablation_study():
     )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels)
+    ax.set_xticklabels(labels, size=9*4)
     #ax.set_ylabel('Speedup ratio over Native')
 
     ax.grid(False)
@@ -226,7 +228,7 @@ def generalization_ablation_study():
     )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels)
+    ax.set_xticklabels(labels, size=9*4)
     #ax.set_ylabel('Speedup ratio over Native')
 
     ax.grid(False)
@@ -310,7 +312,7 @@ def speedup_side_by_side():
         facecolor=transparent(CLASSIFIER_COLOR, 0.7),
         label='Classifier',
         hatch=CLASSIFIER_HATCHING,
-        linewidth=1.5
+        linewidth=1.5,
     )
 
     bars3 = ax.bar(
@@ -336,15 +338,14 @@ def speedup_side_by_side():
     )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.set_ylabel('Speedup ratio over Native')
-
+    ax.set_xticklabels(labels, size=9 * 4)
+    ax.set_ylabel('Speedup ratio over Native', size=8 * 2.5, loc='top')
     ax.grid(False)
 
-    ax.legend(frameon=False, loc="upper left")
+    ax.legend(frameon=False, loc="upper left", fontsize=8 * 3,ncol=2)
     ax.set_ylim(0, 7)
-    plt.yticks([])
-    ax.spines['left'].set_visible(False)
+    #plt.yticks([])
+    #ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -368,6 +369,225 @@ def speedup_side_by_side():
     #plt.set_title("Speedup ratio over native with each model on JOB-C, STATS and TPC-H")
     plt.tight_layout()
     plt.savefig("./data/speedups.pdf")
+
+# shows total execution time of the JOB-C benchmark with each optimizer
+# runtimes in table.csv are in milliseconds, plotted in minutes
+def job_total_runtime():
+    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t')
+
+    ms_to_min = 1000 * 60
+
+    optimizers = [
+        ('Native',       NATIVE_COLOR,     NATIVE_HATCHING),
+        ('Postgres_fdw', EXPLORED_COLOR,   EXPLORED_HATCHING),
+        ('NativeML',     NATIVEML_COLOR,   NATIVEML_HATCHING),
+        ('Classifier',   CLASSIFIER_COLOR, CLASSIFIER_HATCHING),
+        (SYSTEM_NAME,    VARIBO_COLOR,     VARIBO_HATCHING),
+    ]
+
+    labels = [name for name, _, _ in optimizers]
+    runtimes = [job_df[name].sum() / ms_to_min for name in labels]
+
+    x = np.arange(len(labels))
+    width = 0.6
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    all_bars = []
+    for i, (name, color, hatch) in enumerate(optimizers):
+        bars = ax.bar(
+            x[i],
+            runtimes[i],
+            width,
+            edgecolor=color,
+            facecolor=transparent(color, 0.7),
+            label=name,
+            hatch=hatch,
+            linewidth=1.5
+        )
+        all_bars.append(bars)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, size=8 * 1.6)
+    ax.set_ylabel('Total execution time (min)', size=8 * 2.5, loc='top')
+    ax.grid(False)
+
+    ax.set_ylim(0, max(runtimes) * 1.15)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    def label_bars(bars):
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                height + 0.01,
+                f"{height:.1f}",
+                ha='center',
+                va='bottom'
+            )
+
+    for bars in all_bars:
+        label_bars(bars)
+
+    plt.tight_layout()
+    plt.savefig("./data/job/total_runtime.pdf")
+
+# shows per-query runtimes of the queries where VariBO beats both Native and Postgres_fdw
+# runtimes in table.csv are in milliseconds, plotted in seconds
+# a runtime of 0 marks a missing measurement, so those queries are skipped
+# log_scale helps when runtimes span several orders of magnitude (e.g. STATS)
+def varibo_best_queries(input_file: str, output_file: str, log_scale: bool = False):
+    # (column in table.csv, legend label, color, hatching), in plotting order
+    optimizers = [
+        ('Postgres_fdw', 'Postgres_fdw',             EXPLORED_COLOR, EXPLORED_HATCHING),
+        ('Native',       'Wayang',                   NATIVE_COLOR,   NATIVE_HATCHING),
+        (SYSTEM_NAME,    'Cross-platform potential', VARIBO_COLOR,   VARIBO_HATCHING),
+    ]
+    names = [name for name, _, _, _ in optimizers]
+
+    table_df = pd.read_csv(input_file, delimiter='\t', usecols=['Query'] + names)
+    table_df = table_df[(table_df[names] > 0).all(axis=1)]
+    table_df = table_df[table_df[names].idxmin(axis=1) == SYSTEM_NAME]
+    table_df = table_df.sort_values('Query').reset_index(drop=True)
+
+    ms_to_s = 1000
+
+    x = np.arange(len(table_df))
+    width = 0.25
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    for i, (name, label, color, hatch) in enumerate(optimizers):
+        bars = ax.bar(
+            x + (i - 1) * width,
+            table_df[name] / ms_to_s,
+            width,
+            edgecolor=color,
+            facecolor=transparent(color, 0.7),
+            label=label,
+            hatch=hatch,
+            linewidth=1.5
+        )
+
+    labels = [str(q) for q in table_df['Query']]
+    long_labels = max(len(l) for l in labels) > 3
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(
+        labels,
+        rotation=45 if long_labels else 0,
+        ha='right' if long_labels else 'center',
+        size=8 * 1.2 if long_labels else None
+    )
+    ax.set_xlabel('Query')
+    ax.set_ylabel('Query runtime (s)')
+    ax.grid(False)
+
+    if log_scale:
+        ax.set_yscale('log')
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    ax.legend(
+        frameon=False,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.0),
+        ncol=3,
+        fontsize=8 * 1.5,
+        handlelength=1.5,
+        columnspacing=1.0,
+    )
+
+    plt.tight_layout()
+    plt.savefig(output_file)
+
+# TPC-H can run on a single engine, so its java/spark baselines are measured separately
+# each <engine>/query<N>-executions.txt holds one runtime (ms) per line, one line per repetition
+# the median per query is written to the Java and Spark columns of the tpch table.csv
+def add_tpch_single_engine_runtimes():
+    table_file = "./data/tpch/table.csv"
+    table_df = pd.read_csv(table_file, delimiter='\t')
+
+    for engine in ['Java', 'Spark']:
+        runtimes = []
+        for query in table_df['Query']:
+            with open(f"./data/tpch/{engine.lower()}/query{query}-executions.txt") as f:
+                runs = [int(line) for line in f if line.strip()]
+            runtimes.append(int(np.median(runs)))
+
+        if engine in table_df.columns:
+            table_df[engine] = runtimes
+        else:
+            table_df.insert(table_df.columns.get_loc('Native') + 1 + ['Java', 'Spark'].index(engine), engine, runtimes)
+
+    table_df.to_csv(table_file, sep='\t', index=False)
+
+# shows per-query runtimes of the TPC-H queries where Wayang or VariBO beats both Java and Spark
+# runtimes in table.csv are in milliseconds, plotted in seconds
+def tpch_varibo_best_queries(output_file: str, log_scale: bool = False):
+    # (column in table.csv, legend label, color, hatching), in plotting order
+    optimizers = [
+        ('Java',      'Java',                     EXPLORED_COLOR, EXPLORED_HATCHING),
+        ('Spark',     'Spark',                    SPARK_COLOR,    SPARK_HATCHING),
+        ('Native',    'Wayang',                   NATIVE_COLOR,   NATIVE_HATCHING),
+        (SYSTEM_NAME, 'Cross-platform potential', VARIBO_COLOR,   VARIBO_HATCHING),
+    ]
+    names = [name for name, _, _, _ in optimizers]
+
+    table_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Query'] + names)
+    table_df = table_df[(table_df[names] > 0).all(axis=1)]
+    # the cross-platform potential can at best match the fastest single engine, faster times are measurement noise
+    best_single_engine = table_df[['Java', 'Spark']].min(axis=1)
+    table_df[SYSTEM_NAME] = table_df[SYSTEM_NAME].clip(lower=best_single_engine)
+    table_df = table_df[(table_df['Native'] < best_single_engine) | (table_df[SYSTEM_NAME] <= best_single_engine)]
+    table_df = table_df.sort_values('Query').reset_index(drop=True)
+
+    ms_to_s = 1000
+
+    x = np.arange(len(table_df))
+    width = 0.2
+    offset = (len(optimizers) - 1) / 2
+
+    fig, ax = plt.subplots(figsize=(14, 4))
+
+    for i, (name, label, color, hatch) in enumerate(optimizers):
+        ax.bar(
+            x + (i - offset) * width,
+            table_df[name] / ms_to_s,
+            width,
+            edgecolor=color,
+            facecolor=transparent(color, 0.7),
+            label=label,
+            hatch=hatch,
+            linewidth=1.5
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(q) for q in table_df['Query']])
+    ax.set_xlabel('Query')
+    ax.set_ylabel('Query runtime (s)')
+    ax.grid(False)
+
+    if log_scale:
+        ax.set_yscale('log')
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    ax.legend(
+        frameon=False,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.0),
+        ncol=4,
+        fontsize=8 * 1.3,
+        handlelength=1.5,
+        columnspacing=1.0,
+    )
+
+    plt.tight_layout()
+    plt.savefig(output_file)
 
 def exploration_graph(input_file: str, ouput_file: str, queries: list, ylim):
     table_df                = pd.read_csv(input_file, delimiter='\t', usecols=['Native', 'Explored'])
@@ -501,6 +721,7 @@ def make_optimization_barchart():
         ("tpch",  "TPC-H"),
     ]
 
+    opt_dfs = []
     for dataset, label in datasets:
         opt_df = pd.read_csv(f"./data/optimization/files/table_barchart_{dataset}.csv",
                              delimiter='\t', usecols=["Optimizer"] + segments)
@@ -525,6 +746,36 @@ def make_optimization_barchart():
         plt.tight_layout()
         plt.savefig(f'./data/optimization/barchart_{dataset}.pdf')
         plt.close(fig)
+        opt_dfs.append(opt_df)
+
+    avg_df = sum(opt_dfs) / len(opt_dfs)
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    bottoms = np.zeros(len(avg_df))
+    for seg, color, hatch in zip(segments, segment_colors, hatches):
+        values = avg_df[seg].values
+        ax.bar(avg_df.index, values, bottom=bottoms, color=transparent(color, 0.7), edgecolor=color, hatch=hatch, label=seg)
+        bottoms += values
+
+    for i, total in enumerate(bottoms):
+        ax.text(i, total, f'{total:.1f}', ha='center', va='bottom', fontsize=9 * 1.5)
+
+    ax.set_ylabel("Optimization time (ms)")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    #ax.legend(frameon=False, loc='upper right')
+
+    ax.legend(
+        frameon=False,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.0),
+        ncol=3,
+    )
+
+    plt.tight_layout()
+    plt.savefig('./data/optimization/optimization.pdf')
+    plt.close(fig)
 
 def make_optimization_linechart():
     base = "./data/optimization/files/optimizations"
@@ -653,35 +904,17 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
         )
 
     ax.set_xlabel("Time since start (s)" if use_time else "Steps")
-    ax.set_ylabel("Best-found plan runtime (s)")
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.legend(handles=legend_handles, frameon=False)
-
-    plt.tight_layout()
-    plt.savefig(output_file)
 
 def main():
     set_paper_style()
     #finetuning_capability_ablation_study()
     #generalization_ablation_study()
     speedup_side_by_side()
-
-    """
-    exploration_graph('./data/tpch/explored.csv', './data/tpch/explored.pdf', range(0, 30), (0.75, 7))
-    exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', range(0, 30), (0.75, 4))
-    exploration_graph('./data/job/explored.csv', './data/job/explored.pdf', range(0, 30), (0.75, 3))
-    make_optimization_barchart()
-    make_optimization_linechart()
-    """
-
-    #plt.show()
-
-    #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
-    #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    #make_tpch_cumsum()
-    #make_optimization_barchart()
+    job_total_runtime()
+    varibo_best_queries('./data/job/table.csv', './data/job/varibo_best_queries.pdf')
+    varibo_best_queries('./data/stats/table.csv', './data/stats/varibo_best_queries.pdf', log_scale=True)
+    tpch_varibo_best_queries('./data/tpch/varibo_best_queries.pdf', log_scale=True)
 
     job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
     job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
@@ -697,7 +930,6 @@ def main():
     stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
     stats_ablation_df = pd.read_csv("./data/stats/ablation.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
     make_exploration_comparison(stats_varibo_df, stats_random_df, stats_ablation_df, xlim=60, output_file='./data/stats/exploration_comparison.pdf')
-
 
 
 if __name__ == "__main__":
