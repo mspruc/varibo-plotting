@@ -1,0 +1,6 @@
+Conversion: 30
+# of operators: 6
+Conversion: 30
+# of operators: 6
+Conversion: 25
+# of operators: 6

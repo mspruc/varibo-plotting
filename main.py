@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 import matplotlib.ticker as mticker
 import matplotlib.colors as mcolors
 import numpy as np
@@ -563,61 +564,100 @@ def make_optimization_linechart():
         plt.savefig(f'./data/optimization/linechart_{dataset}.pdf')
         plt.close(fig)
 
+def smooth_monotone(x, y, num=200):
+    """Monotone cubic (PCHIP) interpolation, so the curve never overshoots the measured points."""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    h = np.diff(x)
+    delta = np.diff(y) / h
+
+    d = np.zeros_like(y)
+    for k in range(1, len(x) - 1):
+        if delta[k - 1] * delta[k] > 0:
+            w1 = 2 * h[k] + h[k - 1]
+            w2 = h[k] + 2 * h[k - 1]
+            d[k] = (w1 + w2) / (w1 / delta[k - 1] + w2 / delta[k])
+    if len(x) > 1:
+        d[0], d[-1] = delta[0], delta[-1]
+
+    xs = np.linspace(x[0], x[-1], num)
+    k = np.clip(np.searchsorted(x, xs, side='right') - 1, 0, len(x) - 2)
+    t = (xs - x[k]) / h[k]
+    h00 = 2 * t**3 - 3 * t**2 + 1
+    h10 = t**3 - 2 * t**2 + t
+    h01 = -2 * t**3 + 3 * t**2
+    h11 = t**3 - t**2
+    ys = h00 * y[k] + h10 * h[k] * d[k] + h01 * y[k + 1] + h11 * h[k] * d[k + 1]
+    return xs, ys
+
 def make_exploration_comparison(varibo_df: pd.DataFrame,
                                 random_df: pd.DataFrame,
+                                ablation_df: pd.DataFrame,
                                 xlim: int,
                                 output_file: str):
 
-    for df in (varibo_df, random_df):
-        df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%H:%M:%S")
-        df.sort_values("Timestamp", inplace=True)
+    series = [
+        (varibo_df, VARIBO_COLOR, 'VariBO', 'o'),
+        (random_df, CLASSIFIER_COLOR, 'Random', 's'),
+        (ablation_df, EXPLORED_COLOR, r'VariBO ($\gamma = 0$)', '^'),
+    ]
 
+    # plot against wall-clock time if every series has timestamps, otherwise against steps
+    use_time = all("Timestamp" in df.columns for df, _, _, _ in series)
+    x_col = "Elapsed" if use_time else "Steps"
+
+    for df, _, _, _ in series:
         df["Runtime"] = df["Runtime"] / 1000.0 #convert runtime to s
 
-        start_time = df["Timestamp"].iloc[0]
-        df["Elapsed"] = (df["Timestamp"] - start_time).dt.total_seconds()
+        if use_time:
+            df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%H:%M:%S")
+            df.sort_values("Timestamp", inplace=True)
+
+            start_time = df["Timestamp"].iloc[0]
+            df["Elapsed"] = (df["Timestamp"] - start_time).dt.total_seconds()
 
         if df['Steps'].iloc[-1] < xlim:
-            df.loc[len(df)] = {
-                "Timestamp": df["Timestamp"].iloc[-1],
-                "Steps": xlim,
-                "Runtime": df["Runtime"].iloc[-1],
-                "Elapsed": df["Elapsed"].iloc[-1]
-            }
+            df.loc[len(df)] = {**df.iloc[-1].to_dict(), "Steps": xlim}
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
-    ax.plot(varibo_df['Elapsed'], varibo_df['Runtime'],
-            marker='o', color=VARIBO_COLOR, label='VariBO')
-
-    ax.plot(random_df['Elapsed'], random_df['Runtime'],
-            marker='o', color=CLASSIFIER_COLOR, label='Random')
+    # hollow, distinct markers so overlapping points stay visible
+    legend_handles = []
+    for df, color, label, marker in series:
+        points = df.drop_duplicates(subset=x_col, keep='last')
+        xs, ys = smooth_monotone(points[x_col], points['Runtime'])
+        ax.plot(xs, ys, color=color)
+        ax.plot(points[x_col], points['Runtime'], linestyle='none', marker=marker,
+                markerfacecolor='none', markeredgewidth=1.5, color=color)
+        legend_handles.append(Line2D([], [], color=color, marker=marker, markerfacecolor='none',
+                                     markeredgewidth=1.5, label=label))
 
     texts = []
 
-    for df, color in [(varibo_df, VARIBO_COLOR), (random_df, CLASSIFIER_COLOR)]:
-        for _, row in df.iterrows():
-            texts.append(
-                ax.text(
-                    row["Elapsed"],
-                    row["Runtime"],
-                    str(row["Steps"]),
-                    fontsize=12,
-                    color=color
+    if use_time:
+        for df, color, _, _ in series:
+            for _, row in df.iterrows():
+                texts.append(
+                    ax.text(
+                        row["Elapsed"],
+                        row["Runtime"],
+                        str(int(row["Steps"])),
+                        fontsize=12,
+                        color=color
+                    )
                 )
-            )
 
-    adjust_text(
-        texts,
-        ax=ax
-    )
+        adjust_text(
+            texts,
+            ax=ax
+        )
 
-    ax.set_xlabel("Time since start (s)")
+    ax.set_xlabel("Time since start (s)" if use_time else "Steps")
     ax.set_ylabel("Best-found plan runtime (s)")
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.legend(frameon=False)
+    ax.legend(handles=legend_handles, frameon=False)
 
     plt.tight_layout()
     plt.savefig(output_file)
@@ -643,17 +683,20 @@ def main():
     #make_tpch_cumsum()
     #make_optimization_barchart()
 
-    #job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    #job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    #make_exploration_comparison(job_varibo_df, job_random_df, xlim=125, output_file='./data/job/exploration_comparison.pdf')
+    job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    job_ablation_df = pd.read_csv("./data/job/ablation.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    make_exploration_comparison(job_varibo_df, job_random_df, job_ablation_df, xlim=125, output_file='./data/job/exploration_comparison.pdf')
 
-    #tpch_varibo_df = pd.read_csv("./data/tpch/12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    #tpch_random_df = pd.read_csv("./data/tpch/random.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    #make_exploration_comparison(tpch_varibo_df, tpch_random_df, xlim=50, output_file='./data/tpch/exploration_comparison.pdf')
+    tpch_varibo_df = pd.read_csv("./data/tpch/12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    tpch_random_df = pd.read_csv("./data/tpch/random.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    tpch_ablation_df = pd.read_csv("./data/tpch/ablation.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    make_exploration_comparison(tpch_varibo_df, tpch_random_df, tpch_ablation_df, xlim=50, output_file='./data/tpch/exploration_comparison.pdf')
 
-    #stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    #stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    #make_exploration_comparison(stats_varibo_df, stats_random_df, xlim=50, output_file='./data/stats/exploration_comparison.pdf')
+    stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    stats_ablation_df = pd.read_csv("./data/stats/ablation.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
+    make_exploration_comparison(stats_varibo_df, stats_random_df, stats_ablation_df, xlim=60, output_file='./data/stats/exploration_comparison.pdf')
 
 
 
