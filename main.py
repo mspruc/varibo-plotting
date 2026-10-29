@@ -433,34 +433,43 @@ def job_total_runtime():
     plt.tight_layout()
     plt.savefig("./data/job/total_runtime.pdf")
 
-# shows per-query runtimes of the queries where VariBO beats both Native and Postgres_fdw
+# shows per-query runtimes of the queries where VariBO beats Spark, Native and Postgres_fdw
+# benchmarks is a list of (section label, table.csv path); all are drawn on one shared x axis,
+# with each benchmark's queries grouped into a labelled section
 # runtimes in table.csv are in milliseconds, plotted in seconds
 # a runtime of 0 marks a missing measurement, so those queries are skipped
 # log_scale helps when runtimes span several orders of magnitude (e.g. STATS)
-def varibo_best_queries(input_file: str, output_file: str, log_scale: bool = False):
+def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = False):
     # (column in table.csv, legend label, color, hatching), in plotting order
     optimizers = [
+        ('Spark',        'Spark',                    SPARK_COLOR,    SPARK_HATCHING),
         ('Postgres_fdw', 'Postgres_fdw',             EXPLORED_COLOR, EXPLORED_HATCHING),
         ('Native',       'Wayang',                   NATIVE_COLOR,   NATIVE_HATCHING),
         (SYSTEM_NAME,    'Cross-platform potential', VARIBO_COLOR,   VARIBO_HATCHING),
     ]
     names = [name for name, _, _, _ in optimizers]
 
-    table_df = pd.read_csv(input_file, delimiter='\t', usecols=['Query'] + names)
-    table_df = table_df[(table_df[names] > 0).all(axis=1)]
-    table_df = table_df[table_df[names].idxmin(axis=1) == SYSTEM_NAME]
-    table_df = table_df.sort_values('Query').reset_index(drop=True)
+    sections = []
+    for benchmark, input_file in benchmarks:
+        df = pd.read_csv(input_file, delimiter='\t', usecols=['Query'] + names)
+        df = df[(df[names] > 0).all(axis=1)]
+        df = df[df[names].idxmin(axis=1) == SYSTEM_NAME]
+        df = df.sort_values('Query')
+        df['Benchmark'] = benchmark
+        sections.append(df)
+    table_df = pd.concat(sections).reset_index(drop=True)
 
     ms_to_s = 1000
 
     x = np.arange(len(table_df))
-    width = 0.25
+    width = 0.2
+    offset = (len(optimizers) - 1) / 2
 
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=(10, 4.5))
 
     for i, (name, label, color, hatch) in enumerate(optimizers):
-        bars = ax.bar(
-            x + (i - 1) * width,
+        ax.bar(
+            x + (i - offset) * width,
             table_df[name] / ms_to_s,
             width,
             edgecolor=color,
@@ -470,22 +479,42 @@ def varibo_best_queries(input_file: str, output_file: str, log_scale: bool = Fal
             linewidth=1.5
         )
 
-    labels = [str(q) for q in table_df['Query']]
-    long_labels = max(len(l) for l in labels) > 3
-
     ax.set_xticks(x)
     ax.set_xticklabels(
-        labels,
-        rotation=45 if long_labels else 0,
-        ha='right' if long_labels else 'center',
-        size=8 * 1.2 if long_labels else None
+        [str(q) for q in table_df['Query']],
+        rotation=45,
+        ha='right',
+        rotation_mode='anchor',
+        size=8 * 1.5
     )
-    ax.set_xlabel('Query')
+    ax.set_xlim(-0.5, len(table_df) - 0.5)
     ax.set_ylabel('Query runtime (s)')
     ax.grid(False)
 
     if log_scale:
         ax.set_yscale('log')
+
+    # separate the benchmark sections and name each one below its tick labels
+    section_bounds = []
+    first = 0
+    for df in sections:
+        section_bounds.append((first, first + len(df) - 1, df['Benchmark'].iloc[0]))
+        first += len(df)
+
+    for first, last, benchmark in section_bounds:
+        if first > 0:
+            ax.axvline(first - 0.5, color='grey', linestyle='--', linewidth=1)
+        ax.annotate(
+            '', xy=(first - 0.4, -0.3), xytext=(last + 0.4, -0.3),
+            xycoords=('data', 'axes fraction'),
+            arrowprops=dict(arrowstyle='-', color='black', linewidth=1),
+            annotation_clip=False,
+        )
+        ax.text(
+            (first + last) / 2, -0.33, benchmark,
+            transform=ax.get_xaxis_transform(),
+            ha='center', va='top', fontweight='bold'
+        )
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -494,14 +523,14 @@ def varibo_best_queries(input_file: str, output_file: str, log_scale: bool = Fal
         frameon=False,
         loc="lower center",
         bbox_to_anchor=(0.5, 1.0),
-        ncol=3,
+        ncol=4,
         fontsize=8 * 1.5,
         handlelength=1.5,
         columnspacing=1.0,
     )
 
     plt.tight_layout()
-    plt.savefig(output_file)
+    plt.savefig(output_file, bbox_inches='tight')
 
 # TPC-H can run on a single engine, so its java/spark baselines are measured separately
 # each <engine>/query<N>-executions.txt holds one runtime (ms) per line, one line per repetition
@@ -912,8 +941,11 @@ def main():
     #generalization_ablation_study()
     speedup_side_by_side()
     job_total_runtime()
-    varibo_best_queries('./data/job/table.csv', './data/job/varibo_best_queries.pdf')
-    varibo_best_queries('./data/stats/table.csv', './data/stats/varibo_best_queries.pdf', log_scale=True)
+    varibo_best_queries(
+        [('JOB', './data/job/table.csv'), ('STATS', './data/stats/table.csv')],
+        './data/varibo_best_queries.pdf',
+        log_scale=True
+    )
     tpch_varibo_best_queries('./data/tpch/varibo_best_queries.pdf', log_scale=True)
 
     job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
