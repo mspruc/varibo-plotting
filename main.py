@@ -433,15 +433,17 @@ def job_total_runtime():
     plt.tight_layout()
     plt.savefig("./data/job/total_runtime.pdf")
 
-# shows per-query runtimes of the queries where VariBO beats Spark, Native and Postgres_fdw
+# shows per-query runtimes of the queries where VariBO beats every baseline (Java, Spark, Postgres_fdw, Native)
 # benchmarks is a list of (section label, table.csv path); all are drawn on one shared x axis,
 # with each benchmark's queries grouped into a labelled section
+# a benchmark without some baseline column (e.g. TPC-H has no Postgres_fdw) is compared against the others only
 # runtimes in table.csv are in milliseconds, plotted in seconds
 # a runtime of 0 marks a missing measurement, so those queries are skipped
 # log_scale helps when runtimes span several orders of magnitude (e.g. STATS)
 def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = False):
     # (column in table.csv, legend label, color, hatching), in plotting order
     optimizers = [
+        ('Java',         'Java',                     NATIVEML_COLOR, NATIVEML_HATCHING),
         ('Spark',        'Spark',                    SPARK_COLOR,    SPARK_HATCHING),
         ('Postgres_fdw', 'Postgres_fdw',             EXPLORED_COLOR, EXPLORED_HATCHING),
         ('Native',       'Wayang',                   NATIVE_COLOR,   NATIVE_HATCHING),
@@ -451,10 +453,11 @@ def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = Fa
 
     sections = []
     for benchmark, input_file in benchmarks:
-        df = pd.read_csv(input_file, delimiter='\t', usecols=['Query'] + names)
-        df = df[(df[names] > 0).all(axis=1)]
-        df = df[df[names].idxmin(axis=1) == SYSTEM_NAME]
-        df = df.sort_values('Query')
+        df = pd.read_csv(input_file, delimiter='\t')
+        available = [name for name in names if name in df.columns]
+        df = df[(df[available] > 0).all(axis=1)]
+        df = df[df[available].idxmin(axis=1) == SYSTEM_NAME]
+        df = df.sort_values('Query').reindex(columns=['Query'] + names)
         df['Benchmark'] = benchmark
         sections.append(df)
     table_df = pd.concat(sections).reset_index(drop=True)
@@ -462,15 +465,20 @@ def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = Fa
     ms_to_s = 1000
 
     x = np.arange(len(table_df))
-    width = 0.2
-    offset = (len(optimizers) - 1) / 2
+    width = 0.8 / len(optimizers)
 
-    fig, ax = plt.subplots(figsize=(10, 4.5))
+    # center each query's bars on its tick, skipping baselines its benchmark lacks so no gaps remain
+    present = table_df[names].notna()
+    slot = present.cumsum(axis=1) - 1
+    offset = (present.sum(axis=1) - 1) / 2
 
-    for i, (name, label, color, hatch) in enumerate(optimizers):
+    fig, ax = plt.subplots(figsize=(14, 4.5))
+
+    for name, label, color, hatch in optimizers:
+        rows = present[name]
         ax.bar(
-            x + (i - offset) * width,
-            table_df[name] / ms_to_s,
+            x[rows] + (slot[name][rows] - offset[rows]) * width,
+            table_df[name][rows] / ms_to_s,
             width,
             edgecolor=color,
             facecolor=transparent(color, 0.7),
@@ -523,7 +531,7 @@ def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = Fa
         frameon=False,
         loc="lower center",
         bbox_to_anchor=(0.5, 1.0),
-        ncol=4,
+        ncol=len(optimizers),
         fontsize=8 * 1.5,
         handlelength=1.5,
         columnspacing=1.0,
@@ -884,10 +892,17 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
 
     # plot against wall-clock time if every series has timestamps, otherwise against steps
     use_time = all("Timestamp" in df.columns for df, _, _, _ in series)
-    x_col = "Elapsed" if use_time else "Steps"
+    # a Time column (HH:MM since the optimization started) is plotted as optimization time in hours
+    use_hours = all("Time" in df.columns for df, _, _, _ in series)
+    x_col = "Elapsed" if use_time else "Hours" if use_hours else "Steps"
+    pad_col = "Hours" if use_hours else "Steps"
 
     for df, _, _, _ in series:
         df["Runtime"] = df["Runtime"] / 1000.0 #convert runtime to s
+
+        if use_hours:
+            hours_minutes = df["Time"].astype(str).str.split(":", expand=True).reindex(columns=[0, 1]).fillna(0).astype(int)
+            df["Hours"] = hours_minutes[0] + hours_minutes[1] / 60.0
 
         if use_time:
             df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%H:%M:%S")
@@ -896,8 +911,8 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
             start_time = df["Timestamp"].iloc[0]
             df["Elapsed"] = (df["Timestamp"] - start_time).dt.total_seconds()
 
-        if df['Steps'].iloc[-1] < xlim:
-            df.loc[len(df)] = {**df.iloc[-1].to_dict(), "Steps": xlim}
+        if df[pad_col].iloc[-1] < xlim:
+            df.loc[len(df)] = {**df.iloc[-1].to_dict(), pad_col: xlim}
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
@@ -907,7 +922,7 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
         points = df.drop_duplicates(subset=x_col, keep='last')
         xs, ys = smooth_monotone(points[x_col], points['Runtime'])
         ax.plot(xs, ys, color=color)
-        ax.plot(points[x_col], points['Runtime'], linestyle='none', marker=marker,
+        ax.plot(points[x_col], points['Runtime'], linestyle='none', marker=marker, clip_on=False,
                 markerfacecolor='none', markeredgewidth=1.5, color=color)
         legend_handles.append(Line2D([], [], color=color, marker=marker, markerfacecolor='none',
                                      markeredgewidth=1.5, label=label))
@@ -932,8 +947,20 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
             ax=ax
         )
 
-    ax.set_xlabel("Time since start (s)" if use_time else "Steps")
+    ax.set_xlabel("Time since start (s)" if use_time else "Optimization time (h)" if use_hours else "Steps")
+    ax.set_ylabel("Best-found plan runtime (s)")
 
+    # put the origin exactly in the bottom left corner, no padding
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(handles=legend_handles, frameon=False)
+
+    plt.tight_layout()
+    plt.savefig(output_file)
+    plt.close(fig)
 
 def main():
     set_paper_style()
@@ -942,26 +969,26 @@ def main():
     speedup_side_by_side()
     job_total_runtime()
     varibo_best_queries(
-        [('JOB', './data/job/table.csv'), ('STATS', './data/stats/table.csv')],
+        [('JOB', './data/job/table.csv'), ('STATS', './data/stats/table.csv'), ('TPC-H', './data/tpch/table.csv')],
         './data/varibo_best_queries.pdf',
         log_scale=True
     )
     tpch_varibo_best_queries('./data/tpch/varibo_best_queries.pdf', log_scale=True)
 
-    job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    job_ablation_df = pd.read_csv("./data/job/ablation.14.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    make_exploration_comparison(job_varibo_df, job_random_df, job_ablation_df, xlim=125, output_file='./data/job/exploration_comparison.pdf')
+    job_varibo_df = pd.read_csv("./data/job/14.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    job_random_df = pd.read_csv("./data/job/random.14.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    job_ablation_df = pd.read_csv("./data/job/ablation.14.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    make_exploration_comparison(job_varibo_df, job_random_df, job_ablation_df, xlim=3, output_file='./data/job/exploration_comparison.pdf')
 
-    tpch_varibo_df = pd.read_csv("./data/tpch/12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    tpch_random_df = pd.read_csv("./data/tpch/random.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    tpch_ablation_df = pd.read_csv("./data/tpch/ablation.12.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    make_exploration_comparison(tpch_varibo_df, tpch_random_df, tpch_ablation_df, xlim=50, output_file='./data/tpch/exploration_comparison.pdf')
+    tpch_varibo_df = pd.read_csv("./data/tpch/12.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    tpch_random_df = pd.read_csv("./data/tpch/random.12.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    tpch_ablation_df = pd.read_csv("./data/tpch/ablation.12.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    make_exploration_comparison(tpch_varibo_df, tpch_random_df, tpch_ablation_df, xlim=0.5, output_file='./data/tpch/exploration_comparison.pdf')
 
-    stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    stats_ablation_df = pd.read_csv("./data/stats/ablation.explored.csv", delimiter='\t', usecols=['Steps','Runtime'])
-    make_exploration_comparison(stats_varibo_df, stats_random_df, stats_ablation_df, xlim=60, output_file='./data/stats/exploration_comparison.pdf')
+    stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    stats_ablation_df = pd.read_csv("./data/stats/ablation.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
+    make_exploration_comparison(stats_varibo_df, stats_random_df, stats_ablation_df, xlim=2, output_file='./data/stats/exploration_comparison.pdf')
 
 
 if __name__ == "__main__":
