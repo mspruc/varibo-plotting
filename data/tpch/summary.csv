@@ -1,0 +1,8 @@
+Optimizer,Total (ms),Total (s),Total (min),Queries counted,Queries missing
+VariBO,663095.00,663.10,11.05,29,12
+Java,1034404.33,1034.40,17.24,30,
+Native,1068011.00,1068.01,17.80,29,12
+NativeML retrained,1222050.68,1222.05,20.37,30,
+Spark,1479061.66,1479.06,24.65,30,
+Classifier,1907409.00,1907.41,31.79,30,
+NativeML,3741349.00,3741.35,62.36,29,12

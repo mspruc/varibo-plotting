@@ -1,0 +1,21 @@
+\begin{table}[t]
+	\centering
+	\caption{Speedup over \textsc{Native} in total runtime of the queries seen during
+		exploration (Explored) and of the remaining queries (Unexplored). Values above
+		$1.0\times$ indicate a speedup over \textsc{Native}. TPC-H has no unexplored
+		queries, since \system explores all of them.}
+	\label{tab:speedups}
+	\begin{tabular}{llccc}
+		\toprule
+		\textbf{Query subset} & \textbf{Optimizer} & \textbf{JOB-C} & \textbf{STATS} & \textbf{TPC-H} \\
+		\midrule
+		\multirow{3}{*}{Explored}   & NativeML retrained & $0.90\times$ & $1.11\times$ & $0.91\times$ \\
+		                            & Classifier         & $0.99\times$ & $1.10\times$ & $0.71\times$ \\
+		                            & \system            & $\mathbf{1.83\times}$ & $\mathbf{2.03\times}$ & $\mathbf{1.61\times}$ \\
+		\cmidrule(lr){1-5}
+		\multirow{3}{*}{Unexplored} & NativeML retrained & $1.00\times$ & $0.87\times$ & -- \\
+		                            & Classifier         & $1.16\times$ & $1.16\times$ & -- \\
+		                            & \system            & $\mathbf{2.39\times}$ & $\mathbf{1.16\times}$ & -- \\
+		\bottomrule
+	\end{tabular}
+\end{table}

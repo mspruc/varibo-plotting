@@ -1,0 +1,27 @@
+\begin{table}[h]
+    \centering
+    \small
+    \caption{Offline exploration cost and break-even point relative to \textsc{Native}.
+    End-to-end time is the total runtime of one workload execution. Time saved is the
+    reduction in that runtime per workload execution. The break-even point is the number
+    of workload executions, and the corresponding number of query executions, after
+    which the saved time exceeds the offline time.}
+    \label{tab:general-breakeven}
+    \begin{tabular}{lrrr}
+        \toprule
+         & JOB-C & STATS & TPC-H \\
+        \midrule
+        Queries (total)                    & 30 & 146 & 30 \\
+        Queries (explored)                 & 15 & 30 & 30 \\
+        Offline time (h)                   & 38.92 & 19.98 & 42.43 \\
+        \midrule
+        End-to-end, \textsc{Native} (min)  & 25.93 & 93.67 & 17.80 \\
+        End-to-end, \system (min)          & 11.79 & 64.75 & 11.05 \\
+        Time saved per execution (min)     & 14.15 & 28.93 & 6.75 \\
+        \midrule
+        Break-even (\# executions)         & \textbf{165.07} & \textbf{41.44} & \textbf{377.24} \\
+        Break-even (\# queries)            & 4952 & 6050 & 11317 \\
+        \bottomrule
+    \end{tabular}
+    \vspace{-0.2cm}
+\end{table}

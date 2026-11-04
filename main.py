@@ -24,6 +24,17 @@ SPARK_HATCHING      = '..'
 
 SYSTEM_NAME = "VariBO"
 
+# every optimizer in the comparison, in plotting order: (table.csv column, label, color, hatch)
+ALL_OPTIMIZERS = [
+    ('Java',               'Java',               EXPLORED_COLOR,   EXPLORED_HATCHING),
+    ('Spark',              'Spark',              SPARK_COLOR,      SPARK_HATCHING),
+    ('Native',             'Native',             NATIVE_COLOR,     NATIVE_HATCHING),
+    ('NativeML',           'NativeML',           NATIVEML_COLOR,   NATIVEML_HATCHING),
+    ('NativeML retrained', 'NativeML retrained', NATIVEML_COLOR,   '++'),
+    ('Classifier',         'Classifier',         CLASSIFIER_COLOR, CLASSIFIER_HATCHING),
+    (SYSTEM_NAME,          SYSTEM_NAME,          VARIBO_COLOR,     VARIBO_HATCHING),
+]
+
 def set_paper_style():
     plt.rcParams.update({
         "font.size": 9 * 1.5,            # base font
@@ -53,9 +64,9 @@ def transparent(color, amount=0.5):
 # we ablate the queries THAT WE DONT EXPLORE ON from the benchmark and see if the explored queries correctly reconstruct
 # JOB STATS TPCH ordered lexicographically
 def finetuning_capability_ablation_study():
-    job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t')
-    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
-    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t')
+    job_df   = pd.read_csv("./data/job/table.csv", delimiter=",")
+    stats_df = pd.read_csv("./data/stats/table.csv", delimiter=",")
+    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter=",")
 
     def restrict_to_explored(full_df, explored_df):
         explored_queries = set(explored_df["Query"])
@@ -160,8 +171,8 @@ def finetuning_capability_ablation_study():
 # we ablate the explored queries from the benchmark and see if the explored queries provide value to the rest of the benchmark
 # JOB STATS TPCH ordered lexicographically
 def generalization_ablation_study():
-    job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t')
-    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
+    job_df   = pd.read_csv("./data/job/table.csv", delimiter=",")
+    stats_df = pd.read_csv("./data/stats/table.csv", delimiter=",")
 
     def restrict_to_not_explored(full_df, explored_df):
         explored_queries = set(explored_df["Query"])
@@ -262,14 +273,9 @@ def generalization_ablation_study():
 # shows speedup ratio relative to native of each benchmark side by side
 # JOB STATS TPCH ordered lexicographically
 def speedup_side_by_side():
-    job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t')
-    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t')
-    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t')
-
-    # postgres_fdw % of native
-    job_percentage_postgres = (job_df['Native'].sum() / job_df['Postgres_fdw'].sum())#*100
-    stats_percentage_postgres = (stats_df['Native'].sum() / stats_df['NativeML'].sum())#*100
-    tpch_percentage_postgres  = (tpch_df['Native'].sum() / tpch_df['NativeML'].sum())#*100
+    job_df   = pd.read_csv("./data/job/table.csv", delimiter=",")
+    stats_df = pd.read_csv("./data/stats/table.csv", delimiter=",")
+    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter=",")
 
     # classifier % of native
     job_percentage_classifier   = (job_df['Native'].sum() / job_df['Classifier'].sum())#*100
@@ -292,17 +298,6 @@ def speedup_side_by_side():
     width = 0.25
 
     fig, ax = plt.subplots(figsize=(7, 4))
-
-    bars1 = ax.bar(
-        x - 2 * width,
-        [job_percentage_postgres, stats_percentage_nativeml, tpch_percentage_nativeml],
-        width,
-        edgecolor=EXPLORED_COLOR,
-        facecolor=transparent(EXPLORED_COLOR, 0.7),
-        label='Postgres_fdw',
-        hatch=EXPLORED_HATCHING,
-        linewidth=1.5
-    )
 
     bars2 = ax.bar(
         x,
@@ -360,7 +355,6 @@ def speedup_side_by_side():
                 va='bottom'
             )
 
-    label_bars(bars1)
     label_bars(bars2)
     label_bars(bars3)
     label_bars(bars4)
@@ -373,13 +367,12 @@ def speedup_side_by_side():
 # shows total execution time of the JOB-C benchmark with each optimizer
 # runtimes in table.csv are in milliseconds, plotted in minutes
 def job_total_runtime():
-    job_df = pd.read_csv("./data/job/table.csv", delimiter='\t')
+    job_df = pd.read_csv("./data/job/table.csv", delimiter=",")
 
     ms_to_min = 1000 * 60
 
     optimizers = [
         ('Native',       NATIVE_COLOR,     NATIVE_HATCHING),
-        ('Postgres_fdw', EXPLORED_COLOR,   EXPLORED_HATCHING),
         ('NativeML',     NATIVEML_COLOR,   NATIVEML_HATCHING),
         ('Classifier',   CLASSIFIER_COLOR, CLASSIFIER_HATCHING),
         (SYSTEM_NAME,    VARIBO_COLOR,     VARIBO_HATCHING),
@@ -433,10 +426,192 @@ def job_total_runtime():
     plt.tight_layout()
     plt.savefig("./data/job/total_runtime.pdf")
 
-# shows per-query runtimes of the queries where VariBO beats every baseline (Java, Spark, Postgres_fdw, Native)
+# shows total execution time (min) of every optimizer, one panel per benchmark
+# totals are summed from table.csv over the queries that every optimizer finished, so all
+# bars of a panel cover the same queries (ms in table.csv, plotted in minutes)
+# optimizers keep a fixed order and color across panels so they are comparable
+def total_runtime_summary(output_file: str):
+    benchmarks = [
+        ('JOB-C', './data/job/table.csv'),
+        ('STATS', './data/stats/table.csv'),
+        ('TPC-H', './data/tpch/table.csv'),
+    ]
+
+    optimizers = ALL_OPTIMIZERS
+    columns = [col for col, _, _, _ in optimizers]
+
+    fig, axes = plt.subplots(1, len(benchmarks), figsize=(16, 4.5))
+    x = np.arange(len(optimizers))
+    width = 0.8
+
+    for ax, (title, path) in zip(axes, benchmarks):
+        df = pd.read_csv(path, dtype={'Query': str}).dropna(subset=columns)
+        runtimes = [df[col].sum() / (1000 * 60) for col in columns]
+
+        for i, (_, label, color, hatch) in enumerate(optimizers):
+            bar = ax.bar(
+                x[i],
+                runtimes[i],
+                width,
+                edgecolor=color,
+                facecolor=transparent(color, 0.7),
+                hatch=hatch,
+                linewidth=1.5,
+                label=label,
+            )[0]
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                f"{bar.get_height():.1f}",
+                ha='center',
+                va='bottom',
+                size=8 * 1.4,
+            )
+
+        ax.set_title(f'{title}')
+        ax.set_xticks([])
+        ax.set_ylim(0, max(runtimes) * 1.15)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.grid(False)
+
+    axes[0].set_ylabel('Total execution time (min)')
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper center', ncol=len(optimizers),
+               frameon=False, bbox_to_anchor=(0.5, 1.02), fontsize=8 * 1.6,
+               handlelength=1.5, columnspacing=1.0)
+
+    plt.tight_layout(rect=(0, 0, 1, 0.9))
+    plt.savefig(output_file, bbox_inches='tight')
+
+# shows the per-query speedup of VariBO over one baseline (baseline runtime / VariBO runtime)
+# queries are sorted by speedup; bars start at 1.0 and grow up where VariBO is faster and
+# down where the baseline is faster. queries missing a runtime for either optimizer are skipped.
+# the y axis is logarithmic so a 2x win and a 2x loss have the same bar length
+def varibo_per_query_speedup(table_file: str, baseline: str, baseline_color: str,
+                             baseline_hatch: str, output_file: str):
+    df = pd.read_csv(table_file, dtype={'Query': str}).dropna(subset=[baseline, SYSTEM_NAME])
+    speedups = (df[baseline] / df[SYSTEM_NAME]).sort_values(ascending=False).to_numpy()
+
+    faster = speedups >= 1
+    x = np.arange(len(speedups))
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for mask, color, hatch, label in [
+        (faster,  VARIBO_COLOR,   VARIBO_HATCHING, f'{SYSTEM_NAME} faster'),
+        (~faster, baseline_color, baseline_hatch,  f'{baseline} faster'),
+    ]:
+        ax.bar(
+            x[mask],
+            speedups[mask] - 1,
+            width=0.8,
+            bottom=1,
+            edgecolor=color,
+            facecolor=transparent(color, 0.7),
+            hatch=hatch,
+            linewidth=1.0,
+            label=label,
+        )
+
+    ax.set_yscale('log')
+    low, high = speedups.min(), speedups.max()
+    ymin, ymax = min(low, 1) / 1.15, max(high, 1) * 1.15
+    ax.set_ylim(ymin, ymax)
+    candidates = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]
+    if ymax / ymin < 20:
+        candidates = sorted(candidates + [0.25, 0.33, 0.67, 1.5, 3, 4])
+    ax.yaxis.set_major_locator(mticker.FixedLocator([t for t in candidates if ymin <= t <= ymax]))
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f'{v:g}x'))
+    ax.yaxis.set_minor_locator(mticker.NullLocator())
+    ax.axhline(1, color='black', linewidth=0.8)
+
+    ax.set_xlim(-0.6, len(speedups) - 0.4)
+    ax.set_xticks([])
+    ax.set_xlabel('Queries (sorted by improvement)')
+    ax.set_ylabel(f'Speedup over {baseline}')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(frameon=False, loc='upper right')
+
+    plt.tight_layout()
+    plt.savefig(output_file, bbox_inches='tight')
+    plt.close(fig)
+
+
+# per-query speedup of VariBO over Native, NativeML and Classifier for every benchmark
+def varibo_per_query_speedups():
+    benchmarks = ['job', 'stats', 'tpch']
+    baselines = [
+        ('Native',     NATIVE_COLOR,     NATIVE_HATCHING,     'native'),
+        ('NativeML',   NATIVEML_COLOR,   NATIVEML_HATCHING,   'nativeML'),
+        ('Classifier', CLASSIFIER_COLOR, CLASSIFIER_HATCHING, 'classifier'),
+    ]
+    for benchmark in benchmarks:
+        for baseline, color, hatch, suffix in baselines:
+            varibo_per_query_speedup(
+                f'./data/{benchmark}/table.csv', baseline, color, hatch,
+                f'./data/{benchmark}/varibo_vs_{suffix}.pdf',
+            )
+
+# runtime percentiles of every optimizer for one benchmark
+# each optimizer's queries are sorted by its own runtime, then the runtime at each percentile
+# is taken (linear interpolation, 100% = slowest query). only queries that every optimizer
+# finished are used, so all optimizers are measured on the same query set.
+# runtimes in table.csv are in milliseconds, plotted in seconds
+PERCENTILES = [25, 50, 75, 90, 95, 100]
+
+def runtime_percentiles(table_file: str, output_file: str, log_scale: bool = False):
+    columns = [col for col, _, _, _ in ALL_OPTIMIZERS]
+    df = pd.read_csv(table_file, dtype={'Query': str}).dropna(subset=columns)
+
+    group = np.arange(len(PERCENTILES))
+    width = 0.8 / len(ALL_OPTIMIZERS)
+
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    for i, (col, label, color, hatch) in enumerate(ALL_OPTIMIZERS):
+        values = np.percentile(df[col] / 1000, PERCENTILES)
+        ax.bar(
+            group + (i - (len(ALL_OPTIMIZERS) - 1) / 2) * width,
+            values,
+            width,
+            edgecolor=color,
+            facecolor=transparent(color, 0.7),
+            hatch=hatch,
+            linewidth=1.2,
+            label=label,
+        )
+
+    ax.set_xticks(group)
+    ax.set_xticklabels([f'{p}%' for p in PERCENTILES])
+    ax.set_xlabel(f'Percentile of all queries')
+    ax.set_ylabel('Runtime (s)')
+    if log_scale:
+        ax.set_yscale('log')
+        low, high = ax.get_ylim()
+        subs = (1, 2, 5) if high / low < 100 else (1,)
+        ax.yaxis.set_major_locator(mticker.LogLocator(base=10, subs=subs))
+        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f'{v:g}'))
+        ax.yaxis.set_minor_locator(mticker.NullLocator())
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(False)
+    ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), ncol=4, frameon=False,
+              fontsize=8 * 1.6, handlelength=1.5, columnspacing=1.0)
+
+    plt.tight_layout()
+    plt.savefig(output_file, bbox_inches='tight')
+    plt.close(fig)
+
+
+def runtime_percentiles_all():
+    runtime_percentiles('./data/job/table.csv',   './data/job/runtime_percentiles.pdf', log_scale=True)
+    runtime_percentiles('./data/stats/table.csv', './data/stats/runtime_percentiles.pdf', log_scale=True)
+    runtime_percentiles('./data/tpch/table.csv',  './data/tpch/runtime_percentiles.pdf', log_scale=True)
+
+# shows per-query runtimes of the queries where VariBO beats every baseline (Java, Spark, Native)
 # benchmarks is a list of (section label, table.csv path); all are drawn on one shared x axis,
 # with each benchmark's queries grouped into a labelled section
-# a benchmark without some baseline column (e.g. TPC-H has no Postgres_fdw) is compared against the others only
 # runtimes in table.csv are in milliseconds, plotted in seconds
 # a runtime of 0 marks a missing measurement, so those queries are skipped
 # log_scale helps when runtimes span several orders of magnitude (e.g. STATS)
@@ -445,7 +620,6 @@ def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = Fa
     optimizers = [
         ('Java',         'Java',                     NATIVEML_COLOR, NATIVEML_HATCHING),
         ('Spark',        'Spark',                    SPARK_COLOR,    SPARK_HATCHING),
-        ('Postgres_fdw', 'Postgres_fdw',             EXPLORED_COLOR, EXPLORED_HATCHING),
         ('Native',       'Wayang',                   NATIVE_COLOR,   NATIVE_HATCHING),
         (SYSTEM_NAME,    'Cross-platform potential', VARIBO_COLOR,   VARIBO_HATCHING),
     ]
@@ -453,7 +627,7 @@ def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = Fa
 
     sections = []
     for benchmark, input_file in benchmarks:
-        df = pd.read_csv(input_file, delimiter='\t')
+        df = pd.read_csv(input_file, delimiter=",")
         available = [name for name in names if name in df.columns]
         df = df[(df[available] > 0).all(axis=1)]
         df = df[df[available].idxmin(axis=1) == SYSTEM_NAME]
@@ -545,7 +719,7 @@ def varibo_best_queries(benchmarks: list, output_file: str, log_scale: bool = Fa
 # the median per query is written to the Java and Spark columns of the tpch table.csv
 def add_tpch_single_engine_runtimes():
     table_file = "./data/tpch/table.csv"
-    table_df = pd.read_csv(table_file, delimiter='\t')
+    table_df = pd.read_csv(table_file, delimiter=",")
 
     for engine in ['Java', 'Spark']:
         runtimes = []
@@ -559,7 +733,7 @@ def add_tpch_single_engine_runtimes():
         else:
             table_df.insert(table_df.columns.get_loc('Native') + 1 + ['Java', 'Spark'].index(engine), engine, runtimes)
 
-    table_df.to_csv(table_file, sep='\t', index=False)
+    table_df.to_csv(table_file, sep=",", index=False)
 
 # shows per-query runtimes of the TPC-H queries where Wayang or VariBO beats both Java and Spark
 # runtimes in table.csv are in milliseconds, plotted in seconds
@@ -573,7 +747,7 @@ def tpch_varibo_best_queries(output_file: str, log_scale: bool = False):
     ]
     names = [name for name, _, _, _ in optimizers]
 
-    table_df = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Query'] + names)
+    table_df = pd.read_csv("./data/tpch/table.csv", delimiter=",", usecols=['Query'] + names)
     table_df = table_df[(table_df[names] > 0).all(axis=1)]
     # the cross-platform potential can at best match the fastest single engine, faster times are measurement noise
     best_single_engine = table_df[['Java', 'Spark']].min(axis=1)
@@ -702,9 +876,9 @@ def exploration_graph(input_file: str, ouput_file: str, queries: list, ylim):
     plt.savefig(ouput_file, dpi=300)
 
 def make_tpch_cumsum():
-    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
-    job_df   = pd.read_csv("./data/job/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
-    stats_df = pd.read_csv("./data/stats/table.csv", delimiter='\t', usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
+    tpch_df  = pd.read_csv("./data/tpch/table.csv", delimiter=",", usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
+    job_df   = pd.read_csv("./data/job/table.csv", delimiter=",", usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
+    stats_df = pd.read_csv("./data/stats/table.csv", delimiter=",", usecols=['Native','NativeML','Classifier',SYSTEM_NAME])
 
     def speedups(df):
         totals = df.sum()
@@ -968,6 +1142,9 @@ def main():
     #generalization_ablation_study()
     speedup_side_by_side()
     job_total_runtime()
+    total_runtime_summary('./data/total_runtime_summary.pdf')
+    varibo_per_query_speedups()
+    runtime_percentiles_all()
     varibo_best_queries(
         [('JOB', './data/job/table.csv'), ('STATS', './data/stats/table.csv'), ('TPC-H', './data/tpch/table.csv')],
         './data/varibo_best_queries.pdf',
