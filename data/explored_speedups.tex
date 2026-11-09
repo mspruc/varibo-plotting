@@ -9,11 +9,13 @@
 		\toprule
 		\textbf{Query subset} & \textbf{Optimizer} & \textbf{JOB-C} & \textbf{STATS} & \textbf{TPC-H} \\
 		\midrule
-		\multirow{3}{*}{Explored}   & NativeML retrained & $0.90\times$ & $1.11\times$ & $0.91\times$ \\
+		\multirow{4}{*}{Explored}   & NativeML           & $0.82\times$ & $0.84\times$ & $0.29\times$ \\
+		                            & NativeML retrained & $0.90\times$ & $1.11\times$ & $0.91\times$ \\
 		                            & Classifier         & $0.99\times$ & $1.10\times$ & $0.71\times$ \\
 		                            & \system            & $\mathbf{1.83\times}$ & $\mathbf{2.03\times}$ & $\mathbf{1.61\times}$ \\
 		\cmidrule(lr){1-5}
-		\multirow{3}{*}{Unexplored} & NativeML retrained & $1.00\times$ & $0.87\times$ & -- \\
+		\multirow{4}{*}{Unexplored} & NativeML           & $0.79\times$ & $0.70\times$ & -- \\
+		                            & NativeML retrained & $1.00\times$ & $0.87\times$ & -- \\
 		                            & Classifier         & $1.16\times$ & $1.16\times$ & -- \\
 		                            & \system            & $\mathbf{2.39\times}$ & $\mathbf{1.16\times}$ & -- \\
 		\bottomrule

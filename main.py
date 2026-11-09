@@ -922,9 +922,11 @@ def make_tpch_cumsum():
     plt.savefig('./data/speedups.pdf')
 
 def make_optimization_barchart():
-    segments = ["Encoding", "Inference", "Unpacking", "Decoding", "Enumeration"]
-    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00']
-    hatches = ['---', '\\\\\\', '///', 'xx', '||']
+    csv_segments = ["Encoding", "Inference", "Unpacking", "Decoding", "Enumeration"]
+    segments = csv_segments + ["Conversion"]
+    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00', '#009E73']
+    hatches = ['---', '\\\\\\', '///', 'xx', '||', '..']
+    conversion_ms = 35
 
     datasets = [
         ("job",   "JOB-C"),
@@ -935,8 +937,15 @@ def make_optimization_barchart():
     opt_dfs = []
     for dataset, label in datasets:
         opt_df = pd.read_csv(f"./data/optimization/files/table_barchart_{dataset}.csv",
-                             delimiter='\t', usecols=["Optimizer"] + segments)
+                             delimiter='\t', usecols=["Optimizer"] + csv_segments)
         opt_df = opt_df.set_index("Optimizer").fillna(0)
+
+        # VariBO and Classifier spend their whole enumeration time on conversion;
+        # all other optimizers spend a fixed 35ms of their enumeration time on it
+        full_conversion = opt_df.index.isin(["VariBO", "Classifier"])
+        opt_df["Conversion"] = np.where(full_conversion, opt_df["Enumeration"],
+                                        np.minimum(conversion_ms, opt_df["Enumeration"]))
+        opt_df["Enumeration"] -= opt_df["Conversion"]
 
         fig, ax = plt.subplots(figsize=(7, 4))
 
@@ -1001,18 +1010,15 @@ def make_optimization_linechart():
         cost_df   = pd.read_csv(f"{base}/cost/{dataset}/table.csv",   sep=r'\s+')
         varibo_df = pd.read_csv(f"{base}/{dataset}/table.csv",        sep=r'\s+')
 
-        operators     = native_df['Operators']
-        cost_factor   = native_df['Time'].values / cost_df['Time'].values
-        varibo_factor = native_df['Time'].values / varibo_df['Time'].values
-
+        # Time holds the average optimization time (ms) of the queries with that many operators
         fig, ax = plt.subplots(figsize=(7, 4))
 
-        ax.axhline(y=1.0, color=NATIVE_COLOR, linestyle='--', linewidth=0.8, label='Native')
-        ax.plot(operators, cost_factor,   color=NATIVEML_COLOR, label='NativeML', linewidth=1.5)
-        ax.plot(operators, varibo_factor, color=VARIBO_COLOR,   label='VariBO',   linewidth=1.5)
+        ax.plot(native_df['Operators'], native_df['Time'], color=NATIVE_COLOR,   label='Native',   linewidth=1.5)
+        ax.plot(cost_df['Operators'],   cost_df['Time'],   color=NATIVEML_COLOR, label='NativeML', linewidth=1.5)
+        ax.plot(varibo_df['Operators'], varibo_df['Time'], color=VARIBO_COLOR,   label='VariBO',   linewidth=1.5)
 
         ax.set_xlabel('Number of operators')
-        ax.set_ylabel('Speedup over Native')
+        ax.set_ylabel('Avg. optimization time (ms)')
         #ax.set_title(label)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -1136,11 +1142,129 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
     plt.savefig(output_file)
     plt.close(fig)
 
+# shows the aggregate speedup of VariBO on out-of-distribution queries (ood.csv) over Native (table.csv)
+# average and median are taken over the per-query speedups (Native / VariBO),
+# overall is the total Native runtime divided by the total VariBO runtime.
+# queries missing a runtime for either optimizer are skipped
+def speedups_ood(output_file: str):
+    benchmarks = [
+        ('STATS', './data/stats'),
+        ('TPC-H', './data/tpch'),
+    ]
+
+    metrics = [
+        ('average', EXPLORED_COLOR, EXPLORED_HATCHING),
+        ('median',  NATIVE_COLOR,   NATIVEML_HATCHING),
+        ('overall', VARIBO_COLOR,   VARIBO_HATCHING),
+    ]
+
+    values = {name: [] for name, _, _ in metrics}
+    for title, folder in benchmarks:
+        native = pd.read_csv(f"{folder}/table.csv", dtype={'Query': str}, usecols=['Query', 'Native'])
+        ood = pd.read_csv(f"{folder}/ood.csv", dtype={'Query': str})
+        df = native.merge(ood, on='Query').dropna(subset=['Native', SYSTEM_NAME])
+
+        # sanity check: total native runtime should match the one reported in summary.csv
+        summary = pd.read_csv(f"{folder}/summary.csv").set_index('Optimizer')
+        native_total = summary.loc['Native', 'Total (ms)']
+        if not np.isclose(df['Native'].sum(), native_total, rtol=1e-3):
+            print(f"[speedups_ood] {title}: Native total {df['Native'].sum():.2f} ms over "
+                  f"{len(df)} OOD queries differs from summary.csv ({native_total:.2f} ms)")
+
+        per_query = df['Native'] / df[SYSTEM_NAME]
+        values['average'].append(per_query.mean())
+        values['median'].append(per_query.median())
+        values['overall'].append(df['Native'].sum() / df[SYSTEM_NAME].sum())
+
+    x = np.arange(len(benchmarks))
+    width = 0.25
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    for i, (name, color, hatch) in enumerate(metrics):
+        bars = ax.bar(
+            x + (i - 1) * width,
+            values[name],
+            width,
+            edgecolor=color,
+            facecolor=transparent(color, 0.7),
+            hatch=hatch,
+            linewidth=1.5,
+            label=name,
+        )
+        for bar in bars:
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.01,
+                f"{bar.get_height():.2f}x",
+                ha='center',
+                va='bottom',
+            )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([title for title, _ in benchmarks])
+    ax.set_ylabel('Speedup ratio over Native')
+    ax.set_ylim(0, max(max(v) for v in values.values()) * 1.25)
+    ax.grid(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(frameon=False, loc='lower center', bbox_to_anchor=(0.5, 1.0), ncol=len(metrics),
+              handlelength=1.5, columnspacing=1.0)
+
+    plt.tight_layout()
+    plt.savefig(output_file, bbox_inches='tight')
+
+# shows the per-query runtime difference (Native - VariBO, in seconds) on out-of-distribution queries,
+# VariBO runtimes from ood.csv and Native runtimes from table.csv. queries are sorted by improvement;
+# bars above zero are queries where VariBO is faster, bars below zero where Native is faster.
+# queries missing a runtime for either optimizer are skipped
+def ood_per_query_runtime(folder: str, output_file: str):
+    native = pd.read_csv(f"{folder}/table.csv", dtype={'Query': str}, usecols=['Query', 'Native'])
+    ood = pd.read_csv(f"{folder}/ood.csv", dtype={'Query': str})
+    df = native.merge(ood, on='Query').dropna(subset=['Native', SYSTEM_NAME])
+
+    deltas = ((df['Native'] - df[SYSTEM_NAME]) / 1000).sort_values(ascending=False).to_numpy()
+    faster = deltas >= 0
+    x = np.arange(len(deltas))
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for mask, color, hatch, label in [
+        (faster,  VARIBO_COLOR, VARIBO_HATCHING, f'{SYSTEM_NAME} faster'),
+        (~faster, NATIVE_COLOR, NATIVE_HATCHING, 'Native faster'),
+    ]:
+        ax.bar(
+            x[mask],
+            deltas[mask],
+            width=0.8,
+            edgecolor=color,
+            facecolor=transparent(color, 0.7),
+            hatch=hatch,
+            linewidth=1.0,
+            label=label,
+        )
+
+    ax.axhline(0, color='black', linewidth=0.8)
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f'{v:g}s'))
+    ax.set_xlim(-0.6, len(deltas) - 0.4)
+    ax.set_xticks([])
+    ax.set_xlabel('Queries (sorted by improvement)')
+    ax.set_ylabel('Runtime (Δs) vs Native')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(frameon=False, loc='upper center')
+
+    plt.tight_layout()
+    plt.savefig(output_file, bbox_inches='tight')
+    plt.close(fig)
+
 def main():
     set_paper_style()
     #finetuning_capability_ablation_study()
     #generalization_ablation_study()
     speedup_side_by_side()
+    speedups_ood('./data/speedups_ood.pdf')
+    ood_per_query_runtime('./data/stats', './data/stats/ood_vs_native.pdf')
+    ood_per_query_runtime('./data/tpch', './data/tpch/ood_vs_native.pdf')
     job_total_runtime()
     total_runtime_summary('./data/total_runtime_summary.pdf')
     varibo_per_query_speedups()
@@ -1171,6 +1295,7 @@ def main():
 if __name__ == "__main__":
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    main()
+    #main()
+    make_optimization_barchart()
     #finetuning_capability_ablation_study()
 

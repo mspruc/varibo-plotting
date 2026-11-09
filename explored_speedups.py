@@ -28,7 +28,7 @@ EXPLORED = {
 }
 
 SUBSETS = ['Explored', 'Unexplored']
-OPTIMIZERS = ['NativeML retrained', 'Classifier', 'VariBO']
+OPTIMIZERS = ['NativeML', 'NativeML retrained', 'Classifier', 'VariBO']
 TEX_NAMES = {'VariBO': r'\system'}
 
 

@@ -1,7 +1,9 @@
 Subset,Optimizer,JOB-C,STATS,TPC-H
+Explored,NativeML,0.82,0.84,0.29
 Explored,NativeML retrained,0.90,1.11,0.91
 Explored,Classifier,0.99,1.10,0.71
 Explored,VariBO,1.83,2.03,1.61
+Unexplored,NativeML,0.79,0.70,
 Unexplored,NativeML retrained,1.00,0.87,
 Unexplored,Classifier,1.16,1.16,
 Unexplored,VariBO,2.39,1.16,
