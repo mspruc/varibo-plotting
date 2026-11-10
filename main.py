@@ -35,6 +35,11 @@ ALL_OPTIMIZERS = [
     (SYSTEM_NAME,          SYSTEM_NAME,          VARIBO_COLOR,     VARIBO_HATCHING),
 ]
 
+# size (inches) of every plot that is placed in a row of three LaTeX subfigures
+SUBFIGURE_SIZE = (9.8, 4.3)
+# legend font size shared by the subfigure plots and the optimization bar/line charts
+LEGEND_FONTSIZE = 17
+
 def set_paper_style():
     plt.rcParams.update({
         "font.size": 9 * 1.5,            # base font
@@ -426,25 +431,36 @@ def job_total_runtime():
     plt.tight_layout()
     plt.savefig("./data/job/total_runtime.pdf")
 
-# shows total execution time (min) of every optimizer, one panel per benchmark
+# shows total execution time (min) of every optimizer, one file per benchmark
+# (meant to be placed side by side as LaTeX subfigures: JOB-C, STATS, TPC-H; no titles,
+# the benchmark name goes into the subfigure caption)
 # totals are summed from table.csv over the queries that every optimizer finished, so all
-# bars of a panel cover the same queries (ms in table.csv, plotted in minutes)
-# optimizers keep a fixed order and color across panels so they are comparable
-def total_runtime_summary(output_file: str):
+# bars of a plot cover the same queries (ms in table.csv, plotted in minutes)
+# optimizers keep a fixed order and color across plots so they are comparable.
+# only JOB-C (left) gets the y-axis label and only STATS (middle) gets the shared legend.
+# all three files have exactly the dimensions of the runtime_percentiles plots (SUBFIGURE_SIZE)
+# and the same axes position, so they scale identically in LaTeX. every file reserves room
+# for the legend at the top, even though only STATS draws it, so the plots line up.
+def total_runtime_summary(output_prefix: str):
     benchmarks = [
-        ('JOB-C', './data/job/table.csv'),
-        ('STATS', './data/stats/table.csv'),
-        ('TPC-H', './data/tpch/table.csv'),
+        ('job',   './data/job/table.csv'),
+        ('stats', './data/stats/table.csv'),
+        ('tpch',  './data/tpch/table.csv'),
     ]
+    ylabel_on = 'job'
+    legend_on = 'stats'
 
     optimizers = ALL_OPTIMIZERS
     columns = [col for col, _, _, _ in optimizers]
 
-    fig, axes = plt.subplots(1, len(benchmarks), figsize=(16, 4.5))
     x = np.arange(len(optimizers))
     width = 0.8
 
-    for ax, (title, path) in zip(axes, benchmarks):
+    for key, path in benchmarks:
+        fig, ax = plt.subplots(figsize=SUBFIGURE_SIZE)
+        # fixed margins (room for the y label and legend everywhere) so all files line up
+        fig.subplots_adjust(left=0.09, right=0.99, bottom=0.03, top=0.80)
+
         df = pd.read_csv(path, dtype={'Query': str}).dropna(subset=columns)
         runtimes = [df[col].sum() / (1000 * 60) for col in columns]
 
@@ -468,22 +484,25 @@ def total_runtime_summary(output_file: str):
                 size=8 * 1.4,
             )
 
-        ax.set_title(f'{title}')
         ax.set_xticks([])
         ax.set_ylim(0, max(runtimes) * 1.15)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.grid(False)
 
-    axes[0].set_ylabel('Total execution time (min)')
+        if key == ylabel_on:
+            ax.set_ylabel('Total execution time (min)')
 
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', ncol=len(optimizers),
-               frameon=False, bbox_to_anchor=(0.5, 1.02), fontsize=8 * 1.6,
-               handlelength=1.5, columnspacing=1.0)
+        if key == legend_on:
+            # centered on the figure (not the axes, which are shifted right by the y label room)
+            ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.0),
+                      bbox_transform=fig.transFigure, ncol=4,
+                      frameon=False, fontsize=LEGEND_FONTSIZE, handlelength=1.5,
+                      columnspacing=1.0)
 
-    plt.tight_layout(rect=(0, 0, 1, 0.9))
-    plt.savefig(output_file, bbox_inches='tight')
+        # no tight cropping: every file keeps exactly SUBFIGURE_SIZE
+        fig.savefig(f'{output_prefix}_{key}.pdf')
+        plt.close(fig)
 
 # shows the per-query speedup of VariBO over one baseline (baseline runtime / VariBO runtime)
 # queries are sorted by speedup; bars start at 1.0 and grow up where VariBO is faster and
@@ -529,7 +548,9 @@ def varibo_per_query_speedup(table_file: str, baseline: str, baseline_color: str
     ax.set_xlim(-0.6, len(speedups) - 0.4)
     ax.set_xticks([])
     ax.set_xlabel('Queries (sorted by improvement)')
-    ax.set_ylabel(f'Speedup over {baseline}')
+    # long baseline names (e.g. NativeML retrained) do not fit next to the axis on one line
+    sep = '\n' if len(baseline) > 10 else ' '
+    ax.set_ylabel(f'Speedup over{sep}{baseline}')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.legend(frameon=False, loc='upper right')
@@ -539,13 +560,15 @@ def varibo_per_query_speedup(table_file: str, baseline: str, baseline_color: str
     plt.close(fig)
 
 
-# per-query speedup of VariBO over Native, NativeML and Classifier for every benchmark
+# per-query speedup of VariBO over Native, NativeML, Classifier and NativeML retrained for every benchmark
 def varibo_per_query_speedups():
     benchmarks = ['job', 'stats', 'tpch']
     baselines = [
         ('Native',     NATIVE_COLOR,     NATIVE_HATCHING,     'native'),
         ('NativeML',   NATIVEML_COLOR,   NATIVEML_HATCHING,   'nativeML'),
         ('Classifier', CLASSIFIER_COLOR, CLASSIFIER_HATCHING, 'classifier'),
+        # same color and hatching as in ALL_OPTIMIZERS
+        ('NativeML retrained', NATIVEML_COLOR, '++', 'nativeML_retrained'),
     ]
     for benchmark in benchmarks:
         for baseline, color, hatch, suffix in baselines:
@@ -559,16 +582,21 @@ def varibo_per_query_speedups():
 # is taken (linear interpolation, 100% = slowest query). only queries that every optimizer
 # finished are used, so all optimizers are measured on the same query set.
 # runtimes in table.csv are in milliseconds, plotted in seconds
+# meant as LaTeX subfigures (JOB-C, STATS, TPC-H): show_ylabel is set only for JOB-C (left)
+# and show_legend only for STATS (middle). the figure has a fixed size and fixed margins
+# (room for label and legend is always reserved), so all three files line up.
 PERCENTILES = [25, 50, 75, 90, 95, 100]
 
-def runtime_percentiles(table_file: str, output_file: str, log_scale: bool = False):
+def runtime_percentiles(table_file: str, output_file: str, log_scale: bool = False,
+                        show_legend: bool = True, show_ylabel: bool = True):
     columns = [col for col, _, _, _ in ALL_OPTIMIZERS]
     df = pd.read_csv(table_file, dtype={'Query': str}).dropna(subset=columns)
 
     group = np.arange(len(PERCENTILES))
     width = 0.8 / len(ALL_OPTIMIZERS)
 
-    fig, ax = plt.subplots(figsize=(10, 4.5))
+    fig, ax = plt.subplots(figsize=SUBFIGURE_SIZE)
+    fig.subplots_adjust(left=0.09, right=0.99, bottom=0.17, top=0.80)
     for i, (col, label, color, hatch) in enumerate(ALL_OPTIMIZERS):
         values = np.percentile(df[col] / 1000, PERCENTILES)
         ax.bar(
@@ -585,7 +613,8 @@ def runtime_percentiles(table_file: str, output_file: str, log_scale: bool = Fal
     ax.set_xticks(group)
     ax.set_xticklabels([f'{p}%' for p in PERCENTILES])
     ax.set_xlabel(f'Percentile of all queries')
-    ax.set_ylabel('Runtime (s)')
+    if show_ylabel:
+        ax.set_ylabel('Runtime (s)')
     if log_scale:
         ax.set_yscale('log')
         low, high = ax.get_ylim()
@@ -596,18 +625,24 @@ def runtime_percentiles(table_file: str, output_file: str, log_scale: bool = Fal
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.grid(False)
-    ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), ncol=4, frameon=False,
-              fontsize=8 * 1.6, handlelength=1.5, columnspacing=1.0)
+    if show_legend:
+        # centered on the figure (not the axes, which are shifted right by the y label room)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.0),
+                  bbox_transform=fig.transFigure, ncol=4, frameon=False,
+                  fontsize=LEGEND_FONTSIZE, handlelength=1.5, columnspacing=1.0)
 
-    plt.tight_layout()
-    plt.savefig(output_file, bbox_inches='tight')
+    # no tight cropping: every file keeps exactly SUBFIGURE_SIZE
+    fig.savefig(output_file)
     plt.close(fig)
 
 
 def runtime_percentiles_all():
-    runtime_percentiles('./data/job/table.csv',   './data/job/runtime_percentiles.pdf', log_scale=True)
-    runtime_percentiles('./data/stats/table.csv', './data/stats/runtime_percentiles.pdf', log_scale=True)
-    runtime_percentiles('./data/tpch/table.csv',  './data/tpch/runtime_percentiles.pdf', log_scale=True)
+    runtime_percentiles('./data/job/table.csv',   './data/job/runtime_percentiles.pdf', log_scale=True,
+                        show_legend=False, show_ylabel=True)
+    runtime_percentiles('./data/stats/table.csv', './data/stats/runtime_percentiles.pdf', log_scale=True,
+                        show_legend=True, show_ylabel=False)
+    runtime_percentiles('./data/tpch/table.csv',  './data/tpch/runtime_percentiles.pdf', log_scale=True,
+                        show_legend=False, show_ylabel=False)
 
 # shows per-query runtimes of the queries where VariBO beats every baseline (Java, Spark, Native)
 # benchmarks is a list of (section label, table.csv path); all are drawn on one shared x axis,
@@ -923,10 +958,12 @@ def make_tpch_cumsum():
 
 def make_optimization_barchart():
     csv_segments = ["Encoding", "Inference", "Unpacking", "Decoding", "Enumeration"]
-    segments = csv_segments + ["Conversion"]
-    segment_colors = ['#56B4E9', '#F0E442', '#CC79A7', '#D55E00', '#E69F00', '#009E73']
-    hatches = ['---', '\\\\\\', '///', 'xx', '||', '..']
-    conversion_ms = 35
+    # Unpacking and Decoding are shown together as Post-processing;
+    # Data-movement is split off from Enumeration below
+    segments = ["Encoding", "Inference", "Post-processing", "Enumeration", "Data-movement"]
+    segment_colors = ['#56B4E9', '#F0E442', '#D55E00', '#E69F00', '#009E73']
+    hatches = ['---', '\\\\\\', 'xx', '||', '..']
+    data_movement_ms = 35
 
     datasets = [
         ("job",   "JOB-C"),
@@ -940,12 +977,15 @@ def make_optimization_barchart():
                              delimiter='\t', usecols=["Optimizer"] + csv_segments)
         opt_df = opt_df.set_index("Optimizer").fillna(0)
 
-        # VariBO and Classifier spend their whole enumeration time on conversion;
+        opt_df["Post-processing"] = opt_df["Unpacking"] + opt_df["Decoding"]
+        opt_df = opt_df.drop(columns=["Unpacking", "Decoding"])
+
+        # VariBO and Classifier spend their whole enumeration time on data movement;
         # all other optimizers spend a fixed 35ms of their enumeration time on it
-        full_conversion = opt_df.index.isin(["VariBO", "Classifier"])
-        opt_df["Conversion"] = np.where(full_conversion, opt_df["Enumeration"],
-                                        np.minimum(conversion_ms, opt_df["Enumeration"]))
-        opt_df["Enumeration"] -= opt_df["Conversion"]
+        full_data_movement = opt_df.index.isin(["VariBO", "Classifier"])
+        opt_df["Data-movement"] = np.where(full_data_movement, opt_df["Enumeration"],
+                                           np.minimum(data_movement_ms, opt_df["Enumeration"]))
+        opt_df["Enumeration"] -= opt_df["Data-movement"]
 
         fig, ax = plt.subplots(figsize=(7, 4))
 
@@ -962,9 +1002,11 @@ def make_optimization_barchart():
         #ax.set_title(label)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.legend(frameon=False, loc='upper left')
+        # above the plot: at LEGEND_FONTSIZE it would cover the bars inside the axes
+        ax.legend(frameon=False, loc='lower center', bbox_to_anchor=(0.5, 1.0), ncol=3,
+                  fontsize=LEGEND_FONTSIZE, handlelength=1.5, columnspacing=1.0)
         plt.tight_layout()
-        plt.savefig(f'./data/optimization/barchart_{dataset}.pdf')
+        plt.savefig(f'./data/optimization/barchart_{dataset}.pdf', bbox_inches='tight')
         plt.close(fig)
         opt_dfs.append(opt_df)
 
@@ -991,10 +1033,13 @@ def make_optimization_barchart():
         loc="lower center",
         bbox_to_anchor=(0.5, 1.0),
         ncol=3,
+        fontsize=LEGEND_FONTSIZE,
+        handlelength=1.5,
+        columnspacing=1.0,
     )
 
     plt.tight_layout()
-    plt.savefig('./data/optimization/optimization.pdf')
+    plt.savefig('./data/optimization/optimization.pdf', bbox_inches='tight')
     plt.close(fig)
 
 def make_optimization_linechart():
@@ -1027,9 +1072,10 @@ def make_optimization_linechart():
             loc="lower center",
             bbox_to_anchor=(0.5, 1.0),
             ncol=3,
+            fontsize=LEGEND_FONTSIZE,
         )
         plt.tight_layout()
-        plt.savefig(f'./data/optimization/linechart_{dataset}.pdf')
+        plt.savefig(f'./data/optimization/linechart_{dataset}.pdf', bbox_inches='tight')
         plt.close(fig)
 
 def smooth_monotone(x, y, num=200):
@@ -1062,7 +1108,8 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
                                 random_df: pd.DataFrame,
                                 ablation_df: pd.DataFrame,
                                 xlim: int,
-                                output_file: str):
+                                output_file: str,
+                                xtick_step: float = None):
 
     series = [
         (varibo_df, VARIBO_COLOR, 'VariBO', 'o'),
@@ -1075,7 +1122,6 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
     # a Time column (HH:MM since the optimization started) is plotted as optimization time in hours
     use_hours = all("Time" in df.columns for df, _, _, _ in series)
     x_col = "Elapsed" if use_time else "Hours" if use_hours else "Steps"
-    pad_col = "Hours" if use_hours else "Steps"
 
     for df, _, _, _ in series:
         df["Runtime"] = df["Runtime"] / 1000.0 #convert runtime to s
@@ -1091,8 +1137,6 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
             start_time = df["Timestamp"].iloc[0]
             df["Elapsed"] = (df["Timestamp"] - start_time).dt.total_seconds()
 
-        if df[pad_col].iloc[-1] < xlim:
-            df.loc[len(df)] = {**df.iloc[-1].to_dict(), pad_col: xlim}
 
     fig, ax = plt.subplots(figsize=(7, 4))
 
@@ -1106,6 +1150,10 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
                 markerfacecolor='none', markeredgewidth=1.5, color=color)
         legend_handles.append(Line2D([], [], color=color, marker=marker, markerfacecolor='none',
                                      markeredgewidth=1.5, label=label))
+        # each line stops at its last measurement; a dashed line down to the x axis marks the end
+        last = points.iloc[-1]
+        ax.vlines(last[x_col], 0, last['Runtime'], colors='grey', linestyles='--',
+                  linewidth=1.2, zorder=1)
 
     texts = []
 
@@ -1127,19 +1175,28 @@ def make_exploration_comparison(varibo_df: pd.DataFrame,
             ax=ax
         )
 
-    ax.set_xlabel("Time since start (s)" if use_time else "Optimization time (h)" if use_hours else "Steps")
+    ax.set_xlabel("Time since start (s)" if use_time else "Exploration time (h)" if use_hours else "Steps")
     ax.set_ylabel("Best-found plan runtime (s)")
 
     # put the origin exactly in the bottom left corner, no padding
-    ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
+    # the x axis always spans the full exploration budget (xlim), even if every line ends earlier
+    if use_time:
+        ax.set_xlim(left=0)
+    else:
+        ax.set_xlim(0, xlim)
+    # fixed tick spacing on the x axis (e.g. 0.5 h), otherwise matplotlib picks the ticks
+    if xtick_step is not None:
+        ax.xaxis.set_major_locator(mticker.MultipleLocator(xtick_step))
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.legend(handles=legend_handles, frameon=False)
+    # above the plot, so the dashed end lines never run through it
+    ax.legend(handles=legend_handles, frameon=False, loc='lower center',
+              bbox_to_anchor=(0.5, 1.0), ncol=3, handlelength=1.5, columnspacing=1.0)
 
     plt.tight_layout()
-    plt.savefig(output_file)
+    plt.savefig(output_file, bbox_inches='tight')
     plt.close(fig)
 
 # shows the aggregate speedup of VariBO on out-of-distribution queries (ood.csv) over Native (table.csv)
@@ -1266,7 +1323,7 @@ def main():
     ood_per_query_runtime('./data/stats', './data/stats/ood_vs_native.pdf')
     ood_per_query_runtime('./data/tpch', './data/tpch/ood_vs_native.pdf')
     job_total_runtime()
-    total_runtime_summary('./data/total_runtime_summary.pdf')
+    total_runtime_summary('./data/total_runtime_summary')
     varibo_per_query_speedups()
     runtime_percentiles_all()
     varibo_best_queries(
@@ -1289,13 +1346,13 @@ def main():
     stats_varibo_df = pd.read_csv("./data/stats/query.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
     stats_random_df = pd.read_csv("./data/stats/random.query.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
     stats_ablation_df = pd.read_csv("./data/stats/ablation.explored.csv", delimiter='\t', usecols=['Time','Runtime'], dtype={'Time': str})
-    make_exploration_comparison(stats_varibo_df, stats_random_df, stats_ablation_df, xlim=2, output_file='./data/stats/exploration_comparison.pdf')
+    make_exploration_comparison(stats_varibo_df, stats_random_df, stats_ablation_df, xlim=2, output_file='./data/stats/exploration_comparison.pdf', xtick_step=0.5)
 
 
 if __name__ == "__main__":
     #stats_exploration_queries = pd.read_csv("./data/stats/explored.csv", delimiter='\t', usecols=["Query"])['Query']
     #exploration_graph('./data/stats/explored.csv', './data/stats/explored.pdf', list(stats_exploration_queries))
-    #main()
+    main()
     make_optimization_barchart()
     #finetuning_capability_ablation_study()
 
