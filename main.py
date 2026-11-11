@@ -437,18 +437,15 @@ def job_total_runtime():
 # totals are summed from table.csv over the queries that every optimizer finished, so all
 # bars of a plot cover the same queries (ms in table.csv, plotted in minutes)
 # optimizers keep a fixed order and color across plots so they are comparable.
-# only JOB-C (left) gets the y-axis label and only STATS (middle) gets the shared legend.
+# every plot shows its own y-axis label and legend.
 # all three files have exactly the dimensions of the runtime_percentiles plots (SUBFIGURE_SIZE)
-# and the same axes position, so they scale identically in LaTeX. every file reserves room
-# for the legend at the top, even though only STATS draws it, so the plots line up.
+# and the same axes position, so they scale identically in LaTeX.
 def total_runtime_summary(output_prefix: str):
     benchmarks = [
         ('job',   './data/job/table.csv'),
         ('stats', './data/stats/table.csv'),
         ('tpch',  './data/tpch/table.csv'),
     ]
-    ylabel_on = 'job'
-    legend_on = 'stats'
 
     optimizers = ALL_OPTIMIZERS
     columns = [col for col, _, _, _ in optimizers]
@@ -481,7 +478,7 @@ def total_runtime_summary(output_prefix: str):
                 f"{bar.get_height():.1f}",
                 ha='center',
                 va='bottom',
-                size=8 * 1.4,
+                size=14,
             )
 
         ax.set_xticks([])
@@ -490,15 +487,13 @@ def total_runtime_summary(output_prefix: str):
         ax.spines['right'].set_visible(False)
         ax.grid(False)
 
-        if key == ylabel_on:
-            ax.set_ylabel('Total execution time (min)')
+        ax.set_ylabel('Total execution time (min)')
 
-        if key == legend_on:
-            # centered on the figure (not the axes, which are shifted right by the y label room)
-            ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.0),
-                      bbox_transform=fig.transFigure, ncol=4,
-                      frameon=False, fontsize=LEGEND_FONTSIZE, handlelength=1.5,
-                      columnspacing=1.0)
+        # centered on the figure (not the axes, which are shifted right by the y label room)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.0),
+                  bbox_transform=fig.transFigure, ncol=4,
+                  frameon=False, fontsize=LEGEND_FONTSIZE, handlelength=1.5,
+                  columnspacing=1.0)
 
         # no tight cropping: every file keeps exactly SUBFIGURE_SIZE
         fig.savefig(f'{output_prefix}_{key}.pdf')
@@ -577,14 +572,28 @@ def varibo_per_query_speedups():
                 f'./data/{benchmark}/varibo_vs_{suffix}.pdf',
             )
 
+
+# per-query speedup of VariBO over the next best optimizer of each benchmark, i.e. the one
+# with the lowest total runtime after VariBO. totals are taken over the queries every optimizer
+# finished, like in total_runtime_summary. color and hatching come from ALL_OPTIMIZERS.
+def varibo_per_query_speedups_vs_next_best():
+    others = [opt for opt in ALL_OPTIMIZERS if opt[0] != SYSTEM_NAME]
+    columns = [col for col, _, _, _ in ALL_OPTIMIZERS]
+    for benchmark in ['job', 'stats', 'tpch']:
+        table_file = f'./data/{benchmark}/table.csv'
+        df = pd.read_csv(table_file, dtype={'Query': str}).dropna(subset=columns)
+        col, _, color, hatch = min(others, key=lambda opt: df[opt[0]].sum())
+        print(f'{benchmark}: next best optimizer after {SYSTEM_NAME} is {col}')
+        varibo_per_query_speedup(table_file, col, color, hatch,
+                                 f'./data/{benchmark}/varibo_vs_next_best.pdf')
+
 # runtime percentiles of every optimizer for one benchmark
 # each optimizer's queries are sorted by its own runtime, then the runtime at each percentile
 # is taken (linear interpolation, 100% = slowest query). only queries that every optimizer
 # finished are used, so all optimizers are measured on the same query set.
 # runtimes in table.csv are in milliseconds, plotted in seconds
-# meant as LaTeX subfigures (JOB-C, STATS, TPC-H): show_ylabel is set only for JOB-C (left)
-# and show_legend only for STATS (middle). the figure has a fixed size and fixed margins
-# (room for label and legend is always reserved), so all three files line up.
+# meant as LaTeX subfigures (JOB-C, STATS, TPC-H): every plot shows its own y-axis label and
+# legend. the figure has a fixed size and fixed margins, so all three files line up.
 PERCENTILES = [25, 50, 75, 90, 95, 100]
 
 def runtime_percentiles(table_file: str, output_file: str, log_scale: bool = False,
@@ -637,12 +646,9 @@ def runtime_percentiles(table_file: str, output_file: str, log_scale: bool = Fal
 
 
 def runtime_percentiles_all():
-    runtime_percentiles('./data/job/table.csv',   './data/job/runtime_percentiles.pdf', log_scale=True,
-                        show_legend=False, show_ylabel=True)
-    runtime_percentiles('./data/stats/table.csv', './data/stats/runtime_percentiles.pdf', log_scale=True,
-                        show_legend=True, show_ylabel=False)
-    runtime_percentiles('./data/tpch/table.csv',  './data/tpch/runtime_percentiles.pdf', log_scale=True,
-                        show_legend=False, show_ylabel=False)
+    runtime_percentiles('./data/job/table.csv',   './data/job/runtime_percentiles.pdf', log_scale=True)
+    runtime_percentiles('./data/stats/table.csv', './data/stats/runtime_percentiles.pdf', log_scale=True)
+    runtime_percentiles('./data/tpch/table.csv',  './data/tpch/runtime_percentiles.pdf', log_scale=True)
 
 # shows per-query runtimes of the queries where VariBO beats every baseline (Java, Spark, Native)
 # benchmarks is a list of (section label, table.csv path); all are drawn on one shared x axis,
@@ -1325,6 +1331,7 @@ def main():
     job_total_runtime()
     total_runtime_summary('./data/total_runtime_summary')
     varibo_per_query_speedups()
+    varibo_per_query_speedups_vs_next_best()
     runtime_percentiles_all()
     varibo_best_queries(
         [('JOB', './data/job/table.csv'), ('STATS', './data/stats/table.csv'), ('TPC-H', './data/tpch/table.csv')],
